@@ -90,7 +90,8 @@ def test_cross_origin_configuration_change_rejected(client):
 
 def test_one_click_probe_persists_only_available_sources(client, monkeypatch):
     def fake_probe(settings):
-        return [{"id":"bilibiliFree","name":"B站","available":True,"latency_ms":18},
+        return [{"id":"bilibiliFree","name":"B站","available":True,"latency_ms":18,
+                 "tested_direction":"en→zh"},
                 {"id":"google","name":"Google","available":False,"error":"blocked",
                  "latency_ms":200}]
 

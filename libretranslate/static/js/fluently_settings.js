@@ -162,7 +162,7 @@
       const diagnostic = probeResults.get(ident);
       const detail = el('p',{class:'probe-result'});
       detail.textContent = diagnostic ?
-        (diagnostic.available ? '● 可用 · '+diagnostic.latency_ms+' ms' +
+        (diagnostic.available ? '● 可用 · '+diagnostic.latency_ms+' ms · '+(diagnostic.tested_direction || 'en→zh') +
            (diagnostic.preview ? ' · '+diagnostic.preview.slice(0,38) : '') :
            '● 不可用 · '+(diagnostic.error || '请求失败')) :
         '● 尚未探测';
@@ -193,7 +193,8 @@
             provider_id:ident, text:'Hello world.', source:'en',
             target:ident==='apertiumFree' ? 'es' : 'zh',
           });
-          probeResults.set(ident,{available:true,latency_ms:Date.now()-started,preview:result.text});
+          probeResults.set(ident,{available:true,latency_ms:Date.now()-started,
+            preview:result.text,tested_direction:'en→'+(ident==='apertiumFree'?'es':'zh')});
         } catch(error) {
           probeResults.set(ident,{available:false,error:error.message,latency_ms:Date.now()-started});
         } finally {renderFreeProviders();}
@@ -297,10 +298,10 @@
       state.free.enabled=result.enabled;
       renderFreeProviders();
       renderDefaultEngineOptions();
-      qs('#probe-summary').textContent=result.available_count+'/'+result.total_count+' 个可用';
+      qs('#probe-summary').textContent=result.available_count+'/'+result.total_count+' 个可用 · '+result.eligible_count+' 个符合目标语言';
       message(result.applied ?
-        '探测完成：已保存并启用 '+result.available_count+' 个可用来源，不可用来源已停用。':
-        '全部检测失败，已保留原启用列表。请检查服务器网络或供应商访问状态。',
+        '探测完成：已保存并启用 '+result.eligible_count+' 个与默认目标语言匹配的来源。':
+        '没有适合默认目标语言的已通过检测来源，已保留原启用列表。',
         !result.applied);
     } catch(error) {
       qs('#probe-summary').textContent='检测失败';

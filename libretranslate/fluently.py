@@ -215,14 +215,22 @@ def free_probe_api():
     settings = read_settings()["free"]
     results = probe_all(settings)
     available = {r["id"] for r in results if r["available"]}
+    # Only auto-enable services actually tested against this workspace's
+    # target language. Apertium's English-to-Spanish success does not make it
+    # usable for English-to-Chinese translation.
+    from .free_providers import normalize_lang
+    target = normalize_lang(read_settings()["ui"]["target_language"], target=True)
+    eligible = {r["id"] for r in results if r["available"] and
+                r.get("tested_direction", "").split("→")[-1] == target}
     applied = False
-    if apply_available and available:
-        enabled = [ident for ident in settings["order"] if ident in available]
+    if apply_available and eligible:
+        enabled = [ident for ident in settings["order"] if ident in eligible]
         save_settings({"free": dict(settings, enabled=enabled)}, _default_options_objects)
         applied = True
     return jsonify({
         "results": results, "available_count": len(available),
-        "total_count": len(results), "applied": applied,
+        "total_count": len(results), "eligible_count": len(eligible),
+        "applied": applied,
         "enabled": read_settings()["free"]["enabled"],
     })
 

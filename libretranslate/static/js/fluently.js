@@ -158,6 +158,8 @@
       textarea.addEventListener('input', () => {
         version.text = textarea.value;
         version.editRevision++;
+        version.requestRevision++;
+        version.loading = false;
         version.translated = '';
         version.error = '';
         version.provider = '';
