@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#f5f7fc">
 <title>Fluently · 多版本翻译对照</title>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static',filename='brand/fluently-logo.svg') }}">
-<link rel="stylesheet" href="{{ url_for('static',filename='css/fluently.css',v='7') }}">
+<link rel="stylesheet" href="{{ url_for('static',filename='css/fluently.css',v='8') }}">
 </head>
 <body>
 <div class="workspace-shell">
@@ -41,7 +41,7 @@
     </section>
     <section id="versions" class="versions-grid" aria-label="多版本原文与译文"></section>
     <div class="workspace-footer">
-      <span>选中词语或句子即可查看释义与语法。</span>
+      <span>鼠标悬停一句话，原文与译文自动联动高亮；选中文字可查看释义与语法。</span>
       <button id="add-version-bottom" type="button" class="add-version">＋ 添加版本</button>
     </div>
   </main>
@@ -84,6 +84,7 @@
     <div id="selection-analysis" class="selection-analysis"></div>
   </section>
 </aside>
-<script src="{{ url_for('static',filename='js/fluently.js',v='7') }}"></script>
+<script src="{{ url_for('static',filename='js/fluently_sentence_hover.js',v='8') }}"></script>
+<script src="{{ url_for('static',filename='js/fluently.js',v='8') }}"></script>
 </body>
 </html>

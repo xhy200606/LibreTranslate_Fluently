@@ -133,6 +133,8 @@
     const narrow = window.matchMedia('(max-width: 760px)').matches;
     input.style.height = (narrow ? sourceHeight : Math.max(sourceHeight, targetHeight)) + 'px';
     if (!narrow) output.style.height = Math.max(sourceHeight, targetHeight) + 'px';
+    const version = versions.find(item => item.id === versionId);
+    version?.sentenceHover?.syncLayout();
   }
 
   function updateOutput(version) {
@@ -151,9 +153,11 @@
     card.querySelector('.word-count').textContent = version.text.length + ' 字符';
     card.querySelector('.translation-engine-name').textContent = version.provider || '';
     syncVersionRowHeight(version.id);
+    version.sentenceHover?.update(version.text,version.translated);
   }
 
   function renderVersions() {
+    versions.forEach(v=>{v.sentenceHover?.destroy();v.sentenceHover=null;});
     const root = $('#versions');
     root.replaceChildren();
     $('#version-count').textContent = versions.length + ' 个版本';
@@ -172,6 +176,7 @@
       remove.addEventListener('click', () => {
         if (versions.length <= 1) return;
         clearTimeout(autoTimers.get(version.id));
+        version.sentenceHover?.destroy();
         versions = versions.filter(v => v.id !== version.id);
         selectionSequence++;
         $('#selection-popup').classList.add('hidden');
@@ -244,6 +249,11 @@
       const alignPanel = textNode('div','version-alignment hidden');
       card.append(head,sourceArea,translationArea,footer,alignPanel);
       root.append(card);
+      if (config.ui.highlight && window.FluentlySentenceHover) {
+        version.sentenceHover = window.FluentlySentenceHover.mount({
+          input:textarea,output,enabled:()=>Boolean(config.ui.highlight),
+        });
+      }
       updateOutput(version);
     });
   }

@@ -40,15 +40,30 @@ def sentences(text):
             begin = idx + 1
         elif char in BOUNDARY:
             next_char = text[idx + 1] if idx + 1 < len(text) else ""
-            if not next_char or next_char in ' "”’）)\r\n' or CJK.match(next_char):
-                push(idx + 1)
+            if not next_char or next_char in " \"'”’）)\r\n" or CJK.match(next_char):
+                # Keep closing quotes/brackets attached to the sentence.
+                end = idx + 1
+                while end < len(text) and text[end] in "\"'”’）)]}":
+                    end += 1
+                push(end)
         elif char == ".":
             prev = text[idx - 1] if idx else ""
             after = text[idx + 1] if idx + 1 < len(text) else ""
             if prev.isdigit() and after.isdigit():
                 continue
-            if not after or after.isspace() or after in "”’)]}":
-                push(idx + 1)
+            # Academic writing often contains shortened labels (Fig., Eq.),
+            # titles (Dr.) and Latin abbreviations (e.g., i.e.). Do not treat
+            # those periods as full sentence boundaries.
+            before = text[max(0, idx - 14):idx + 1]
+            if re.search(
+                    r"\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|Fig|Eq|Ref|Sec|al|"
+                    r"Vol|No|e\.g|i\.e)\.$", before, flags=re.I):
+                continue
+            if not after or after.isspace() or after in "\"'”’)]}":
+                end = idx + 1
+                while end < len(text) and text[end] in "\"'”’）)]}":
+                    end += 1
+                push(end)
     push(len(text))
     if len(chunks) > MAX_SENTENCES:
         raise ValueError("Too many sentences for alignment")

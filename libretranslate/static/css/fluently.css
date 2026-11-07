@@ -731,3 +731,77 @@ html[data-theme] :is(.selection-tabs button.active,.reading-actions button.activ
 html[data-theme] {
   scrollbar-color:var(--ui-panel-border) var(--bg);
 }
+
+
+/* v8: mouse-position sentence detection without changing textarea selection.
+   A hidden text mirror supplies exact wrapped line boxes; highlighter paints
+   translucent rectangles only, keeping the editable textarea fully interactive. */
+:root{
+  --sentence-hover-bg:rgba(104,151,246,.27);
+  --sentence-hover-edge:rgba(61,112,222,.7);
+}
+html[data-theme="dark"]{
+  --sentence-hover-bg:rgba(110,165,255,.34);
+  --sentence-hover-edge:#a4c9ff;
+}
+@media(prefers-color-scheme:dark){
+  html[data-theme="system"]{
+    --sentence-hover-bg:rgba(110,165,255,.34);
+    --sentence-hover-edge:#a4c9ff;
+  }
+}
+.compare-workspace .version-source-editor{
+  position:relative;
+  display:block;
+  width:100%;
+  min-width:0;
+  flex:none;
+}
+.compare-workspace .version-source-editor .version-input{
+  display:block;
+  width:100%;
+  position:relative;
+  z-index:0;
+}
+.compare-workspace .source-sentence-mirror{
+  position:absolute;
+  top:0;
+  left:0;
+  box-sizing:border-box;
+  overflow:hidden;
+  visibility:hidden;
+  pointer-events:none;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.compare-workspace .source-sentence-highlights{
+  position:absolute;
+  inset:0;
+  z-index:2;
+  overflow:hidden;
+  pointer-events:none;
+}
+.compare-workspace .source-sentence-highlight{
+  position:absolute;
+  display:block;
+  pointer-events:none;
+  background:var(--sentence-hover-bg);
+  box-shadow:inset 0 -2px 0 var(--sentence-hover-edge);
+  border-radius:3px;
+}
+.compare-workspace .hover-translation-sentence{
+  border-radius:4px;
+  cursor:text;
+  box-decoration-break:clone;
+  -webkit-box-decoration-break:clone;
+  transition:background-color .1s ease;
+}
+.compare-workspace .hover-translation-sentence.is-matched{
+  color:var(--ink);
+  background:var(--sentence-hover-bg);
+  box-shadow:inset 0 -2px 0 var(--sentence-hover-edge);
+}
+@media(prefers-reduced-motion:reduce){
+  .compare-workspace .hover-translation-sentence{transition:none}
+}

@@ -48,7 +48,10 @@ jobs:
       - name: Check dashboard JavaScript syntax
         run: |
           node --check libretranslate/static/js/fluently.js
+          node --check libretranslate/static/js/fluently_sentence_hover.js
           node --check libretranslate/static/js/fluently_settings.js
+      - name: Test automatic sentence hover and alignment helpers
+        run: node --test libretranslate/tests/js/test_sentence_hover.cjs
 
   test_docker_build:
     runs-on: ubuntu-24.04
