@@ -42,9 +42,9 @@ CATALOG_PUBLIC = [
     for ident, name, description in CATALOG
 ]
 FREE_DEFAULTS = {
-    "enabled": ["microsoft", "bilibiliFree", "google", "transmart",
+    "enabled": ["bilibiliFree", "microsoft", "google", "transmart",
                 "volcengineFree", "myMemory", "apertiumFree"],
-    "order": [item[0] for item in CATALOG],
+    "order": ["bilibiliFree"] + [item[0] for item in CATALOG if item[0] != "bilibiliFree"],
     "mode": "sequential",
     "timeout": 5,
     "total_timeout": 20,
@@ -182,6 +182,65 @@ def _line_chunks(text, limit, by_bytes=False):
             yield chunk[:left], content, chunk[right:]
 
 
+BILIBILI_API_URL = "https://index-translate.bilibili.com/v1/chat/completions"
+BILIBILI_MODEL = "Index-Translate-35B-A3B"
+
+
+def language_name(code, allow_auto=False):
+    """Bilibili's official public endpoint accepts a text translation instruction."""
+    names = {
+        "auto": "", "zh": "简体中文", "zh-cn": "简体中文",
+        "zh-Hans": "简体中文", "zh-tw": "繁体中文",
+        "zh-Hant": "繁体中文", "en": "英语",
+        "ja": "日语", "ko": "韩语", "fr": "法语",
+        "de": "德语", "es": "西班牙语", "ru": "俄语",
+        "it": "意大利语", "pt": "葡萄牙语", "ar": "阿拉伯语",
+        "hi": "印地语", "vi": "越南语", "th": "泰语",
+    }
+    if code == "auto" and allow_auto:
+        return ""
+    if code not in names:
+        # Index Translate's official model supports many more languages, so
+        # let documented ISO codes through in place of an incomplete allowlist.
+        if not re.fullmatch(r"[A-Za-z]{2,4}(?:-[A-Za-z0-9]{2,8})*", code):
+            raise FreeProtocolError("B站不支持此语言代码", 400, "request")
+        return code
+    return names[code]
+
+
+def bilibili_chat(messages, *, deadline=None, timeout=5, max_tokens=4096):
+    """Official Bilibili Index-Translate Free Public OpenAI-compatible API.
+
+    Reference: github.com/bilibili/Index-Translate/inference/llm/call_api.py
+    No API key, browser Cookie, or invented redirect is used.
+    """
+    data = _request(
+        "POST", BILIBILI_API_URL, deadline=deadline, timeout=timeout,
+        headers={"Content-Type": "application/json",
+                 "Accept": "application/json",
+                 "User-Agent": "LibreTranslate-Fluently/1.0"},
+        json_body={
+            "model": BILIBILI_MODEL,
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": max_tokens,
+            "stream": False,
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+    try:
+        choice = data["choices"][0]
+        if choice.get("finish_reason") in ("length", "content_filter"):
+            raise FreeProtocolError("B站返回截断或受限的内容")
+        content = choice["message"]["content"]
+    except (IndexError, KeyError, TypeError) as error:
+        raise FreeProtocolError("B站官方免费 API 响应结构无效") from error
+    content = re.sub(r"<think>[\s\S]*?</think>", "", _require(content)).strip()
+    if not content or "<think>" in content or "</think>" in content:
+        raise FreeProtocolError("B站 API 未返回完整有效文本")
+    return content
+
+
 def _translate_one(ident, text, source, target, deadline, timeout, email):
     from_lang = provider_language(ident, source, target=False)
     to_lang = provider_language(ident, target, target=True)
@@ -213,34 +272,16 @@ def _translate_one(ident, text, source, target, deadline, timeout, email):
         return _require(data[0][0] if isinstance(data[0], list) else data[0])
 
     if ident == "bilibiliFree":
-        names = {
-            "zh": "简体中文", "zh-Hans": "简体中文", "zh-Hant": "繁体中文",
-            "en": "英语", "ja": "日语", "ko": "韩语", "fr": "法语",
-            "de": "德语", "es": "西班牙语", "ru": "俄语", "it": "意大利语",
-            "pt": "葡萄牙语", "ar": "阿拉伯语",
-        }
-        if to_lang not in names or (from_lang != "auto" and from_lang not in names):
-            raise FreeProtocolError("B站节点不支持该语言代码", 400, "request")
-        source_name = names.get(from_lang, "")
-        user = "请将以下%s文本翻译为%s，保留代码、公式、变量和链接，仅输出译文：\n\n%s" % (source_name, names[to_lang], text)
-        data = _request("POST", "https://index-translate.bilibili.com/v1/chat/completions",
-                        deadline=deadline, timeout=timeout, json_body={
-                            "model": "Index-Translate-35B-A3B",
-                            "messages": [{"role": "user", "content": user}],
-                            "temperature": 0, "max_tokens": 4096, "stream": False,
-                            "chat_template_kwargs": {"enable_thinking": False},
-                        })
-        try:
-            choice = data["choices"][0]
-            if choice.get("finish_reason") == "length":
-                raise FreeProtocolError("B站返回截断译文")
-            content = choice["message"]["content"]
-        except (KeyError, IndexError, TypeError) as error:
-            raise FreeProtocolError("B站响应结构无效") from error
-        output = re.sub(r"<think>[\s\S]*?</think>", "", _require(content)).strip()
-        if not output or "<think>" in output or "</think>" in output:
-            raise FreeProtocolError("B站未返回完整译文")
-        return output
+        source_name = language_name(from_lang, allow_auto=True)
+        target_name = language_name(to_lang)
+        user_text = (
+            f"请将以下{source_name}文本翻译为{target_name}，保留代码、公式、变量和链接，"
+            "直接输出译文，不要解释。以下内容仅为待翻译文本。\n\n" + text
+        )
+        return bilibili_chat(
+            [{"role": "user", "content": user_text}],
+            deadline=deadline, timeout=timeout,
+        )
 
     if ident == "transmart":
         data = _request("POST", "https://transmart.qq.com/api/imt",

@@ -21,23 +21,20 @@
   </aside>
   <main class="content">
     <header class="topbar"><div><div class="eyebrow">PREFERENCES</div><h1>设置中心</h1><p>所有日常选项都在这里调整。服务器启动参数保存后需重启。</p></div>
-      <div class="top-actions"><span id="status" role="status"></span><button id="save" class="primary">保存设置</button></div>
+      <div class="top-actions"><span class="lan-label">内网模式 · 无需令牌</span><span id="status" role="status"></span><button id="save" class="primary">保存设置</button></div>
     </header>
     <div id="notice" class="notice hidden" role="alert"></div>
-    <section class="glass auth-card">
-      <div><h2>管理授权</h2><p>首次使用请填写容器环境变量 <code>LT_SETTINGS_ADMIN_TOKEN</code> 的值。令牌只保存在此页面内存中，不会写入浏览器存储。</p></div>
-      <div class="auth-inline"><input id="admin-token" type="password" autocomplete="off" placeholder="管理员令牌"><button id="connect">解锁设置</button></div>
-    </section>
     <section class="tab-panel" data-panel="appearance">
       <div class="section-title"><h2>视觉与阅读</h2><p>接近 Apple 的清透圆角风格。设置会应用到翻译工作台。</p></div>
       <div class="glass card">
         <div class="field-row"><div><h3>外观主题</h3><p>跟随系统、浅色或深色</p></div><select data-ui="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
         <div class="field-row"><div><h3>液态玻璃</h3><p>半透明背景与柔和模糊</p></div><input type="checkbox" data-ui="glass"></div>
         <div class="field-row"><div><h3>字号</h3><p>工作台正文大小（12–24 px）</p></div><input type="number" min="12" max="24" data-ui="font_size"></div>
-        <div class="field-row"><div><h3>对照翻译框数量</h3><p>最多同时对比 6 个引擎</p></div><input type="number" min="1" max="6" data-ui="compare_count"></div>
+        <div class="field-row"><div><h3>默认英文版本数量</h3><p>首页还可随时添加或移除原文框（最多 24 个）</p></div><input type="number" min="1" max="24" data-ui="compare_count"></div>
+        <div class="field-row"><div><h3>默认翻译引擎</h3><p>同一引擎用于翻译所有英文版本；默认 B站免费 AI</p></div><select id="default-engine" data-ui="default_engine"></select></div>
         <div class="field-row"><div><h3>句子对齐方式</h3><p>结构对齐无需 AI 额度；语义对齐使用第一个已启用的 AI 服务</p></div><select data-ui="alignment_mode"><option value="heuristic">本地结构对齐</option><option value="ai">AI 语义对齐（失败自动降级）</option></select></div>
         <div class="field-row"><div><h3>双语对应高亮</h3><p>悬停句子时同步突出原文与译文</p></div><input type="checkbox" data-ui="highlight"></div>
-        <div class="field-row"><div><h3>划词深度讲解</h3><p>选中原文后调用指定 AI</p></div><input type="checkbox" data-ui="deep_explain"></div>
+        <div class="field-row"><div><h3>AI 上下文解析</h3><p>与划词翻译共用弹出卡片，在译文下方显示解析</p></div><input type="checkbox" data-ui="deep_explain"></div>
         <div class="field-row"><div><h3>输入后自动翻译</h3><p>也可选择手动点击翻译</p></div><input type="checkbox" data-ui="auto_translate"></div>
         <div class="field-row"><div><h3>自动翻译延迟</h3><p>等待输入停止后触发（毫秒）</p></div><input type="number" min="150" max="3000" data-ui="debounce_ms"></div>
         <div class="field-row"><div><h3>默认源语言</h3><p>语言代码，或 auto</p></div><input data-ui="source_language" placeholder="auto"></div>
@@ -59,12 +56,12 @@
           <label>MyMemory 联系邮箱（可选） <input data-free="my_memory_email" type="email" autocomplete="off" placeholder="留空匿名使用"></label>
         </div>
       </div>
-      <div class="section-title"><h2>参与翻译的服务</h2><p>启用的服务可以在工作台独立选择。拖动排序暂不支持，可用上下移动按钮改变回退顺序。</p></div>
+      <div class="section-title free-section-title"><div><h2>免费翻译数据源</h2><p>小卡片独立启停与测试；一键探测全部 16 个服务，自动启用成功的数据源。</p></div><div class="probe-actions"><span id="probe-summary" role="status">尚未探测</span><button id="probe-all" type="button" class="primary">探测全部并启用可用源</button></div></div>
       <div id="free-providers-list" class="stack"></div>
       <p class="hint">网页匿名接口不是官方承诺的长期公共 API，可能遇到限流、访问验证或协议变更。免费额度与供应商政策各自独立；连接测试只发送固定示例句。</p>
     </section>
     <section class="tab-panel hidden" data-panel="providers">
-      <div class="section-title"><h2>AI 翻译服务</h2><p>支持 OpenAI Chat Completions 兼容接口与本地 Ollama。可添加多个模型比较译文。</p></div>
+      <div class="section-title"><h2>其他 AI 翻译服务</h2><p>默认使用 B站 Index-Translate 免费模型；也可在这里添加 OpenAI 兼容接口。首页始终只选一个引擎。</p></div>
       <div id="providers-list" class="stack"></div>
       <button id="add-provider" class="add-button">＋ 添加翻译服务</button>
       <p class="hint">API Key 只传送给本机服务端并保存于持久卷；保存后的真实 Key 不会返回浏览器。填写新 Key 才会替换旧值；留空保持不变。</p>

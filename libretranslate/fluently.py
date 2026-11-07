@@ -1,5 +1,6 @@
 """Fluently settings and OpenAI-compatible translation endpoints."""
 import hmac
+import time
 import ipaddress
 import json
 import os
@@ -12,8 +13,9 @@ import re
 from flask import Blueprint, abort, jsonify, render_template, request
 
 from .alignment import align, sentences, validate_ai_groups
-from .free_providers import CATALOG_PUBLIC, CATALOG_IDS, FreeProtocolError, public_health, translate as translate_free, translate_with_fallback
+from .free_providers import CATALOG_PUBLIC, CATALOG_IDS, FreeProtocolError, public_health, translate as translate_free, translate_with_fallback, bilibili_chat
 
+from .fluently_probe import probe_all
 from .default_values import _default_options_objects
 from .gui_settings import (
     admin_settings, normalize_chat_url, public_settings,
@@ -24,23 +26,29 @@ fluently = Blueprint("fluently", __name__)
 
 
 def _admin_required():
-    required = os.environ.get("LT_SETTINGS_ADMIN_TOKEN", "")
-    if not required:
-        abort(503, description="Set LT_SETTINGS_ADMIN_TOKEN to enable GUI administration.")
-    supplied = request.headers.get("Authorization", "")
-    prefix = "Bearer "
-    if not supplied.startswith(prefix) or not hmac.compare_digest(supplied[len(prefix):], required):
-        abort(401, description="Administrator token required.")
+    """LAN-first setup: no secret required when env token is absent.
+
+    Optional LT_SETTINGS_ADMIN_TOKEN is preserved for administrators who
+    explicitly opt in. Write operations remain same-origin.
+    """
     if request.method != "GET":
-        # Never accept cross-origin administrative writes; bearer tokens alone
-        # authenticate but a hostile web page must not trigger them.
         origin = request.headers.get("Origin")
         if origin:
             current = urlsplit(request.host_url)
             supplied_origin = urlsplit(origin)
-            if ((current.scheme, current.netloc) !=
-                    (supplied_origin.scheme, supplied_origin.netloc)):
+            if (current.scheme, current.netloc) != (
+                    supplied_origin.scheme, supplied_origin.netloc):
                 abort(403, description="Cross-origin changes are not allowed.")
+        if request.headers.get("Sec-Fetch-Site") in ("cross-site", "same-site"):
+            abort(403, description="Only same-origin requests are allowed.")
+        if not request.is_json:
+            abort(415, description="JSON requests only.")
+    required = os.environ.get("LT_SETTINGS_ADMIN_TOKEN", "")
+    if required:
+        supplied = request.headers.get("Authorization", "")
+        if not supplied.startswith("Bearer ") or not hmac.compare_digest(
+                supplied[7:], required):
+            abort(401, description="The optional administrator token is required.")
 
 
 def _json_object():
@@ -140,42 +148,83 @@ def ai_api():
     action = data.get("action", "translate")
     if action not in ("translate", "explain", "test"):
         return jsonify({"error": "Invalid action."}), 400
-    provider_id = data.get("provider_id")
-    settings = read_settings()["ai"]
-    provider = next((p for p in settings["providers"]
-                     if p["id"] == provider_id and p.get("enabled", True)), None)
-    if not provider:
-        return jsonify({"error": "Provider not configured or disabled."}), 404
+    provider_id = data.get("provider_id", "bilibiliFree")
+    settings = read_settings()
     source = str(data.get("source", "auto"))[:40]
-    target = str(data.get("target", "en"))[:40]
+    target = str(data.get("target", "zh"))[:40]
+    ai = settings["ai"]
+    provider = next((p for p in ai["providers"]
+                     if p["id"] == provider_id and p.get("enabled", True)), None)
+    if provider_id != "bilibiliFree" and provider is None:
+        return jsonify({"error": "Provider not configured or disabled."}), 404
+
+    context = str(data.get("context", ""))[:5000]
     if action == "explain":
-        system = settings["explanation_prompt"]
-        contextual = str(data.get("context", ""))[:5000]
-        content = "Selected text:\n" + text + "\nContext:\n" + contextual
+        system = ai["explanation_prompt"]
+        content = "Selected text:\n" + text + "\nFull context:\n" + context
     elif action == "test":
-        system = "Translate to English. Return only the translation."
-        content = "你好"
+        system = "Translate to Chinese. Return only the translation."
+        content = "Hello world."
     else:
-        system = settings["translation_prompt"].replace(
+        system = ai["translation_prompt"].replace(
             "{source}", source
         ).replace("{target}", target)
         content = text
     try:
-        answer = _call_provider(
-            provider, [
-                {"role": "system", "content": system},
-                {"role": "user", "content": content},
-            ], settings,
-        )
+        if provider_id == "bilibiliFree":
+            if action == "translate":
+                answer = translate_free(
+                    "bilibiliFree", text, source, target, settings["free"])
+            elif action == "test":
+                answer = translate_free(
+                    "bilibiliFree", "Hello world.", "en", "zh", settings["free"])
+            else:
+                # The free Index-Translate model is translation-focused; a
+                # separate general-purpose LLM may be better at explanation.
+                answer = bilibili_chat([
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": content},
+                ], timeout=min(ai["timeout"], 30), max_tokens=ai["max_tokens"])
+            model = "Index-Translate-35B-A3B"
+        else:
+            answer = _call_provider(
+                provider, [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": content},
+                ], ai)
+            model = provider["model"]
         return jsonify({"text": answer, "provider_id": provider_id,
-                        "model": provider["model"]})
-    except ValueError as error:
+                        "model": model})
+    except (FreeProtocolError, ValueError) as error:
         return jsonify({"error": str(error)}), 502
 
 
 @fluently.get("/fluently/api/free/providers")
 def free_catalog():
     return jsonify({"providers": CATALOG_PUBLIC, "health": public_health()})
+
+
+@fluently.post("/fluently/api/free/probe")
+def free_probe_api():
+    """Probe all 16 suppliers. Optionally persist only currently reachable ones."""
+    _admin_required()
+    payload = _json_object()
+    apply_available = payload.get("apply_available", False)
+    if type(apply_available) is not bool:
+        return jsonify({"error": "apply_available must be boolean"}), 400
+    settings = read_settings()["free"]
+    results = probe_all(settings)
+    available = {r["id"] for r in results if r["available"]}
+    applied = False
+    if apply_available and available:
+        enabled = [ident for ident in settings["order"] if ident in available]
+        save_settings({"free": dict(settings, enabled=enabled)}, _default_options_objects)
+        applied = True
+    return jsonify({
+        "results": results, "available_count": len(available),
+        "total_count": len(results), "applied": applied,
+        "enabled": read_settings()["free"]["enabled"],
+    })
 
 
 @fluently.post("/fluently/api/free/translate")

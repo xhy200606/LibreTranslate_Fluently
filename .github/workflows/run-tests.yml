@@ -38,6 +38,18 @@ jobs:
       run: hatch run test
 
 
+  test_fluently_frontend_js:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check dashboard JavaScript syntax
+        run: |
+          node --check libretranslate/static/js/fluently.js
+          node --check libretranslate/static/js/fluently_settings.js
+
   test_docker_build:
     runs-on: ubuntu-24.04
 
@@ -51,8 +63,6 @@ jobs:
 
   test_docker_healthcheck:
     runs-on: ubuntu-24.04
-    env:
-      LT_SETTINGS_ADMIN_TOKEN: test-only-token-for-docker-ci
     steps:
       - uses: actions/checkout@v4
 

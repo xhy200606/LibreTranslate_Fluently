@@ -38,9 +38,10 @@ GROUPS = {
 }
 DEFAULT_UI = {
     "theme": "system", "glass": True, "font_size": 16,
-    "compare_count": 3, "highlight": True, "deep_explain": True,
-    "auto_translate": False, "source_language": "auto",
-    "target_language": "en", "debounce_ms": 650,
+    "compare_count": 2, "highlight": True, "deep_explain": True,
+    "auto_translate": False, "source_language": "en",
+    "target_language": "zh", "debounce_ms": 650,
+    "default_engine": "bilibiliFree",
     "alignment_mode": "heuristic",
 }
 DEFAULT_AI = {
@@ -194,9 +195,13 @@ def validate_ui(value):
     for name in ("glass", "highlight", "deep_explain", "auto_translate"):
         if type(result[name]) is not bool:
             raise ValueError(name + " must be a boolean")
-    for name, a, b in (("font_size", 12, 24), ("compare_count", 1, 6),
+    for name, a, b in (("font_size", 12, 24), ("compare_count", 1, 24),
                        ("debounce_ms", 150, 3000)):
         _bounded(result[name], name, a, b)
+    if (not isinstance(result["default_engine"], str) or
+            (result["default_engine"] not in CATALOG_IDS | {"libretranslate", "freeAuto"}
+             and not PROVIDER_ID.fullmatch(result["default_engine"]))):
+        raise ValueError("Invalid default engine")
     for name in ("source_language", "target_language"):
         if (not isinstance(result[name], str)
                 or not LANGUAGE_CODE.fullmatch(result[name])):

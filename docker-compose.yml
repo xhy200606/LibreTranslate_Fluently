@@ -9,7 +9,6 @@ services:
       - "5000:5000"
     restart: unless-stopped
     environment:
-      LT_SETTINGS_ADMIN_TOKEN: ${LT_SETTINGS_ADMIN_TOKEN:?Set LT_SETTINGS_ADMIN_TOKEN in .env}
       LT_GUI_SETTINGS_PATH: /app/db/gui_settings.json
       # Allow remote private-network model servers only when trusted.
       LT_AI_ALLOW_PRIVATE_NETWORK: ${LT_AI_ALLOW_PRIVATE_NETWORK:-false}

@@ -3,7 +3,7 @@
   'use strict';
   const qs = s => document.querySelector(s);
   const qsa = s => Array.from(document.querySelectorAll(s));
-  let token = '';
+  const probeResults = new Map();
   let state = null;
   const message = (text, error = false) => {
     qs('#notice').textContent = text;
@@ -14,7 +14,8 @@
   const api = async (path, method, body) => {
     const response = await fetch(path, {
       method, cache: 'no-store',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await response.json().catch(() => ({}));
@@ -39,6 +40,7 @@
   };
   const restore = () => {
     if (!state) return;
+    renderDefaultEngineOptions();
     qsa('[data-ui]').forEach(input => {
       const value = state.ui[input.dataset.ui];
       if (input.type === 'checkbox') input.checked = value;
@@ -52,7 +54,29 @@
     qsa('[data-free]').forEach(input => {input.value = state.free[input.dataset.free];});
     renderProviders();
     renderFreeProviders();
+    document.documentElement.dataset.theme = state.ui.theme || 'system';
+    document.documentElement.dataset.glass = String(state.ui.glass !== false);
     renderServer();
+  };
+  const renderDefaultEngineOptions = () => {
+    const select = qs('#default-engine');
+    select.replaceChildren();
+    const options = [
+      {id:'bilibiliFree',name:'B站 Index-Translate · 免费 AI'},
+      {id:'freeAuto',name:'智能免费池 · 自动换线'},
+      ...state.free.catalog.filter(p => state.free.enabled.includes(p.id) && p.id !== 'bilibiliFree'),
+      {id:'libretranslate',name:'LibreTranslate · Argos'},
+      ...state.ai.providers.filter(p=>p.enabled),
+    ];
+    const existing = new Set();
+    options.forEach(item => {
+      if (existing.has(item.id)) return;
+      existing.add(item.id);
+      const opt = el('option', {value:item.id}, item.name);
+      select.append(opt);
+    });
+    select.value = existing.has(state.ui.default_engine) ?
+      state.ui.default_engine : 'bilibiliFree';
   };
   const newId = () => 'service_' + Math.random().toString(36).slice(2, 12);
   const renderProviders = () => {
@@ -113,63 +137,69 @@
     const root = qs('#free-providers-list');
     root.replaceChildren();
     if (!state.free || !state.free.catalog) return;
-    state.free.order.forEach((ident, index) => {
+    state.free.order.forEach((ident,index) => {
       const provider = state.free.catalog.find(p => p.id === ident);
       if (!provider) return;
-      const card = el('div', {class:'glass card free-provider'});
-      const line = el('div', {class:'free-provider-line'});
-      const title = el('div');
-      title.append(el('h3', {}, provider.name));
-      title.append(el('p', {}, provider.description));
-      const toggle = el('label', {class:'free-toggle'});
-      const checkbox = el('input', {type:'checkbox'});
-      checkbox.checked = state.free.enabled.includes(ident);
-      checkbox.addEventListener('change', () => {
-        if (!checkbox.checked && state.free.enabled.length === 1 && state.free.enabled.includes(ident)) {
-          checkbox.checked = true;
-          message('至少保留一个免费翻译服务。', true);
+      const card = el('article',{class:'glass free-source-card'});
+      const heading = el('div',{class:'free-source-head'});
+      const title = el('div',{class:'free-source-title'});
+      title.append(el('strong',{},provider.name));
+      title.append(el('p',{},provider.description));
+      const enabled = el('input',{type:'checkbox', 'aria-label':'启用 ' + provider.name});
+      enabled.checked = state.free.enabled.includes(ident);
+      enabled.addEventListener('change', () => {
+        if (!enabled.checked && state.free.enabled.length === 1) {
+          enabled.checked = true;
+          message('至少保留一个启用的翻译数据源。',true);
           return;
         }
-        state.free.enabled = checkbox.checked ?
-          [...new Set([...state.free.enabled, ident])] :
-          state.free.enabled.filter(x => x !== ident);
+        state.free.enabled = enabled.checked ?
+          [...new Set([...state.free.enabled,ident])] :
+          state.free.enabled.filter(x=>x!==ident);
+        renderDefaultEngineOptions();
       });
-      toggle.append(checkbox, el('span', {}, '启用'));
-      const buttons = el('div', {class:'free-actions'});
-      const up = el('button', {type:'button'}, '↑');
-      const down = el('button', {type:'button'}, '↓');
+      heading.append(title,enabled);
+      const diagnostic = probeResults.get(ident);
+      const detail = el('p',{class:'probe-result'});
+      detail.textContent = diagnostic ?
+        (diagnostic.available ? '● 可用 · '+diagnostic.latency_ms+' ms' +
+           (diagnostic.preview ? ' · '+diagnostic.preview.slice(0,38) : '') :
+           '● 不可用 · '+(diagnostic.error || '请求失败')) :
+        '● 尚未探测';
+      detail.classList.toggle('available',Boolean(diagnostic?.available));
+      detail.classList.toggle('unavailable',Boolean(diagnostic && !diagnostic.available));
+      const actions = el('div',{class:'free-source-actions'});
+      const up = el('button',{type:'button','aria-label':'前移 '+provider.name},'↑');
+      const down = el('button',{type:'button','aria-label':'后移 '+provider.name},'↓');
       up.disabled = index === 0;
-      down.disabled = index === state.free.order.length - 1;
-      const move = offset => {
+      down.disabled = index === state.free.order.length-1;
+      const move = n => {
         const items = state.free.order;
-        [items[index], items[index + offset]] = [items[index + offset], items[index]];
+        [items[index],items[index+n]] = [items[index+n],items[index]];
         renderFreeProviders();
       };
-      up.addEventListener('click', () => move(-1));
-      down.addEventListener('click', () => move(1));
-      const test = el('button', {type:'button'}, '测试连接');
-      const feedback = el('small', {class:'free-status'}, '尚未检测');
-      test.addEventListener('click', async () => {
-        if (!token) { message('请先解锁设置。', true); return; }
-        // A disabled service can be tested without modifying saved preferences
+      up.addEventListener('click',()=>move(-1));
+      down.addEventListener('click',()=>move(1));
+      const test = el('button',{type:'button'},'单独检测');
+      test.addEventListener('click',async()=>{
         if (!state.free.enabled.includes(ident)) {
-          feedback.textContent = '请先启用并保存该服务。';
-          return;
+          detail.textContent='请先启用并保存此服务，或使用上方一键探测。'; return;
         }
         test.disabled = true;
-        feedback.textContent = '检测中…';
-        const start = Date.now();
+        detail.textContent='连接检测中…';
+        const started=Date.now();
         try {
-          const target = ident === 'apertiumFree' ? 'es' : 'zh';
-          const data = await api('/fluently/api/free/translate', 'POST',
-            {provider_id:ident, text:'Hello world.', source:'en', target});
-          feedback.textContent = '连接正常 · ' + (Date.now() - start) + 'ms · ' + data.text.slice(0,45);
-        } catch (error) { feedback.textContent = '失败：' + error.message; }
-        finally { test.disabled = false; }
+          const result=await api('/fluently/api/free/translate','POST',{
+            provider_id:ident, text:'Hello world.', source:'en',
+            target:ident==='apertiumFree' ? 'es' : 'zh',
+          });
+          probeResults.set(ident,{available:true,latency_ms:Date.now()-started,preview:result.text});
+        } catch(error) {
+          probeResults.set(ident,{available:false,error:error.message,latency_ms:Date.now()-started});
+        } finally {renderFreeProviders();}
       });
-      buttons.append(up, down, test);
-      line.append(title, toggle, buttons);
-      card.append(line, feedback);
+      actions.append(up,down,test);
+      card.append(heading,detail,actions);
       root.append(card);
     });
   };
@@ -243,21 +273,45 @@
     });
     return {ui, ai, server, free};
   };
-  const connect = async () => {
-    token = qs('#admin-token').value.trim();
-    if (!token) { message('请输入管理员令牌。', true); return; }
+  const load = async () => {
     try {
-      state = await api('/fluently/api/settings', 'GET');
+      state = await api('/fluently/api/settings','GET');
       restore();
-      message('已解锁管理设置。');
-    } catch (error) { token = ''; message(error.message, true); }
+      qs('#status').textContent = '设置已加载';
+    } catch(error) {
+      message('无法加载设置：'+error.message+'。内网免令牌模式请删除 LT_SETTINGS_ADMIN_TOKEN 环境变量。',true);
+    }
   };
-  qs('#connect').addEventListener('click', connect);
-  qs('#admin-token').addEventListener('keydown', event => {
-    if (event.key === 'Enter') connect();
+  qs('#default-engine').addEventListener('change', () => {
+    if (state) state.ui.default_engine = qs('#default-engine').value;
+  });
+  qs('#probe-all').addEventListener('click',async()=>{
+    if (!state) {message('尚未加载设置。',true);return;}
+    const button=qs('#probe-all');
+    button.disabled=true;
+    button.textContent='探测进行中…';
+    qs('#probe-summary').textContent='正在检测全部 16 个来源（可能需要若干秒）';
+    try {
+      const result=await api('/fluently/api/free/probe','POST',{apply_available:true});
+      result.results.forEach(item=>probeResults.set(item.id,item));
+      state.free.enabled=result.enabled;
+      renderFreeProviders();
+      renderDefaultEngineOptions();
+      qs('#probe-summary').textContent=result.available_count+'/'+result.total_count+' 个可用';
+      message(result.applied ?
+        '探测完成：已保存并启用 '+result.available_count+' 个可用来源，不可用来源已停用。':
+        '全部检测失败，已保留原启用列表。请检查服务器网络或供应商访问状态。',
+        !result.applied);
+    } catch(error) {
+      qs('#probe-summary').textContent='检测失败';
+      message(error.message,true);
+    } finally {
+      button.disabled=false;
+      button.textContent='重新探测并启用可用源';
+    }
   });
   qs('#save').addEventListener('click', async () => {
-    if (!state) { message('请先解锁设置。', true); return; }
+    if (!state) { message('设置尚未加载。', true); return; }
     try {
       const payload = collect();
       const response = await api('/fluently/api/settings', 'PUT', payload);
@@ -267,16 +321,18 @@
     } catch (error) { message(error.message, true); }
   });
   qs('#add-provider').addEventListener('click', () => {
-    if (!state) { message('请先解锁设置。', true); return; }
+    if (!state) { message('设置尚未加载。', true); return; }
     if (state.ai.providers.length >= 12) { message('最多配置 12 个服务。', true); return; }
     state.ai.providers.push({
       id: newId(), name: '自定义服务', base_url: 'https://api.openai.com/v1',
       model: 'gpt-4o-mini', enabled: true,
     });
     renderProviders();
+    renderDefaultEngineOptions();
   });
   qsa('[data-tab]').forEach(button => button.addEventListener('click', () => {
     qsa('[data-tab]').forEach(node => node.classList.toggle('active', node === button));
     qsa('[data-panel]').forEach(node => node.classList.toggle('hidden', node.dataset.panel !== button.dataset.tab));
   }));
+  load();
 })();
