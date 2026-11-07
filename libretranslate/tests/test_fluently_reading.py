@@ -216,3 +216,26 @@ def test_homepage_compact_and_toasts():
     assert 'id="dictionary-details"' in html
     assert 'id="free-weight-total"' in settings
     assert 'data-reading-prompt="grammar"' in settings
+
+
+def test_version_layout_stacks_cards_and_keeps_original_translation_horizontal():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    styles = (root / "static" / "css" / "fluently.css").read_text(encoding="utf-8")
+    script = (root / "static" / "js" / "fluently.js").read_text(encoding="utf-8")
+    html = (root / "templates" / "fluently.html").read_text(encoding="utf-8")
+
+    assert ".compare-workspace .versions-grid{" in styles
+    assert "grid-template-columns:minmax(0,1fr);" in styles
+    assert '"source translation"' in styles
+    assert '"head head"' in styles and '"footer footer"' in styles
+    assert '@media(max-width:760px)' in styles
+    assert '"source"' in styles and '"translation"' in styles
+    assert "resize:none;" in styles
+    assert "function syncVersionRowHeight(versionId)" in script
+    assert "input.scrollHeight" in script and "output.scrollHeight" in script
+    assert "Math.max(sourceHeight, targetHeight)" in script
+    assert "syncVersionRowHeight(version.id)" in script
+    assert "window.addEventListener('resize'" in script
+    assert 'id="versions"' in html
+    assert "v='5'" in html

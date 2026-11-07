@@ -302,3 +302,108 @@ html[data-theme=dark] .analysis-detail,html[data-theme=dark] .free-source-card{b
  .preset-picker{flex-direction:column;align-items:stretch}
  .toast-viewport{top:12px;right:12px}
 }
+
+
+/* v5 · Stack writing versions vertically; compare source and translation side-by-side. */
+.compare-workspace .versions-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  align-items:start;
+  gap:15px;
+}
+.compare-workspace .version-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  grid-template-areas:
+    "head head"
+    "source translation"
+    "footer footer"
+    "alignment alignment";
+  column-gap:20px;
+  row-gap:12px;
+  align-items:start;
+  min-height:0;
+  width:100%;
+  padding:19px 21px;
+}
+.compare-workspace .version-head{
+  grid-area:head;
+  min-width:0;
+  padding-bottom:12px;
+}
+.compare-workspace .version-source{
+  grid-area:source;
+  min-width:0;
+  min-height:0;
+  width:100%;
+  height:auto;
+  flex:none;
+}
+.compare-workspace .version-translation{
+  grid-area:translation;
+  min-width:0;
+  min-height:0;
+  width:100%;
+  height:auto;
+  flex:none;
+}
+.compare-workspace .version-section-title{
+  min-height:21px;
+  margin-bottom:9px;
+  line-height:1.4;
+}
+.compare-workspace .version-input,
+.compare-workspace .version-output{
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  min-height:120px;
+  max-height:none;
+  padding:13px 16px;
+  border-radius:13px;
+  line-height:1.75;
+  font-size:.92rem;
+  overflow-wrap:anywhere;
+  flex:none;
+}
+.compare-workspace .version-input{
+  resize:none;
+  overflow-y:hidden;
+  overflow-x:hidden;
+  height:auto;
+}
+.compare-workspace .version-output{
+  height:auto;
+  overflow:visible;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.compare-workspace .version-footer{
+  grid-area:footer;
+  min-width:0;
+  margin-top:1px;
+  padding-top:11px;
+}
+.compare-workspace .version-alignment{
+  grid-area:alignment;
+  min-width:0;
+  margin-top:0;
+}
+@media(max-width:760px){
+  .compare-workspace .version-card{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-areas:
+      "head"
+      "source"
+      "translation"
+      "footer"
+      "alignment";
+    row-gap:12px;
+    padding:15px;
+  }
+  .compare-workspace .version-input,
+  .compare-workspace .version-output{
+    min-height:120px;
+    height:auto;
+  }
+}

@@ -107,6 +107,24 @@
       element.dataset.state = kind;
     }
   }
+  function syncVersionRowHeight(versionId) {
+    const card = document.querySelector('[data-version-id="' + versionId + '"]');
+    if (!card) return;
+    const input = card.querySelector('.version-input');
+    const output = card.querySelector('.version-output');
+    if (!input || !output) return;
+
+    // Measure both sides at their natural content height first. Resetting both
+    // prevents a previously long translation from keeping the card too tall.
+    input.style.height = 'auto';
+    output.style.height = 'auto';
+    const sourceHeight = Math.max(120, input.scrollHeight + 2);
+    const targetHeight = Math.max(120, output.scrollHeight + 2);
+    const narrow = window.matchMedia('(max-width: 760px)').matches;
+    input.style.height = (narrow ? sourceHeight : Math.max(sourceHeight, targetHeight)) + 'px';
+    if (!narrow) output.style.height = Math.max(sourceHeight, targetHeight) + 'px';
+  }
+
   function updateOutput(version) {
     const card = document.querySelector('[data-version-id="' + version.id + '"]');
     if (!card) return;
@@ -122,6 +140,7 @@
     card.querySelector('.align-toggle').disabled = !version.translated;
     card.querySelector('.word-count').textContent = version.text.length + ' 字符';
     card.querySelector('.translation-engine-name').textContent = version.provider || '';
+    syncVersionRowHeight(version.id);
   }
 
   function renderVersions() {
@@ -577,6 +596,14 @@
   };
   for (const id of ['engine','source','target']) {
     $('#' + id).addEventListener('change',invalidateTranslations);
+  }
+  window.addEventListener('resize', () => {
+    versions.forEach(version => syncVersionRowHeight(version.id));
+  });
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      versions.forEach(version => syncVersionRowHeight(version.id));
+    });
   }
   $('#translate').addEventListener('click',translateAll);
   $('#add-version').addEventListener('click',addVersion);
