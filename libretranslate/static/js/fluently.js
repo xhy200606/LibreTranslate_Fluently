@@ -102,7 +102,7 @@
     if (!text) return msg('请输入需要翻译的文字。', true);
     translationVersion++;
     const limit = config.ui.compare_count;
-    const enabled = config.ai.providers.filter(p => p.enabled).slice(0,limit);
+    const enabled = config.ai.providers.filter(p => p.enabled);
     const freeEnabled = (config.free?.enabled || []).filter(id => (config.free?.catalog || []).some(p => p.id === id));
     const configuredFree = (config.free?.catalog || []).filter(p => freeEnabled.includes(p.id));
     const candidates = [
