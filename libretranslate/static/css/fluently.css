@@ -416,3 +416,318 @@ html[data-theme=dark] .analysis-detail,html[data-theme=dark] .free-source-card{b
 .cloud-fields .clear-secret{margin-top:5px;padding:5px 8px;font-size:.72rem;
   border:1px solid var(--border);background:transparent;color:var(--muted)}
 .cloud-fields .clear-secret:hover{color:#ba4f68;background:rgba(222,87,124,.08)}
+
+
+/* v7: unified, contrast-safe control tokens for explicit Dark + System Dark.
+   All control backgrounds use these variables so late layout rules cannot
+   accidentally leave light text on a light field. */
+:root {
+  --ui-control:rgba(255,255,255,.88);
+  --ui-control-hover:#f0f4fc;
+  --ui-output:rgba(248,250,254,.94);
+  --ui-elevated:rgba(255,255,255,.95);
+  --ui-soft:rgba(231,238,251,.73);
+  --ui-glass-border:rgba(192,204,228,.75);
+  --ui-panel-border:rgba(185,196,218,.62);
+  --ui-placeholder:#727f91;
+  --ui-link:#3669c6;
+  --ui-soft-link:#365da7;
+  --ui-badge-bg:rgba(100,138,221,.14);
+  --ui-badge-ink:#366ac7;
+  --ui-focus:#5380ee;
+  --ui-selection-bg:rgba(100,148,244,.27);
+  --ui-selection-ink:#1b2d4d;
+  --ui-toast-bg:rgba(255,255,255,.96);
+  --ui-toast-ink:#334362;
+  --ui-error-ink:#aa3852;
+  --ui-error-bg:rgba(252,232,237,.98);
+  --ui-glass-shadow:0 12px 45px rgba(39,51,76,.06),inset 0 1px rgba(255,255,255,.6);
+  --ui-ambient-1:#e6eefe;
+  --ui-ambient-2:#f3e5f4;
+}
+html[data-theme="dark"] {
+  color-scheme:dark;
+  --ink:#eef3ff;
+  --muted:#b4c2d8;
+  --border:rgba(181,199,228,.22);
+  --bg:#101522;
+  --surface:rgba(27,36,55,.94);
+  --ui-control:#27344b;
+  --ui-control-hover:#33425e;
+  --ui-output:#222e43;
+  --ui-elevated:#253249;
+  --ui-soft:rgba(55,76,110,.48);
+  --ui-glass-border:rgba(158,184,225,.22);
+  --ui-panel-border:rgba(155,182,226,.31);
+  --ui-placeholder:#abbad0;
+  --ui-link:#a9c4ff;
+  --ui-soft-link:#b7cafd;
+  --ui-badge-bg:rgba(104,142,235,.27);
+  --ui-badge-ink:#b9d0ff;
+  --ui-focus:#a1bcff;
+  --ui-selection-bg:rgba(95,146,242,.47);
+  --ui-selection-ink:#ffffff;
+  --ui-toast-bg:rgba(36,49,70,.98);
+  --ui-toast-ink:#eef3ff;
+  --ui-error-ink:#ffc0d0;
+  --ui-error-bg:#50273b;
+  --ui-glass-shadow:0 14px 42px rgba(0,0,0,.32),inset 0 1px rgba(213,227,255,.07);
+  --ui-ambient-1:#223454;
+  --ui-ambient-2:#242139;
+}
+@media (prefers-color-scheme:dark) {
+  html[data-theme="system"] {
+    color-scheme:dark;
+    --ink:#eef3ff;
+    --muted:#b4c2d8;
+    --border:rgba(181,199,228,.22);
+    --bg:#101522;
+    --surface:rgba(27,36,55,.94);
+    --ui-control:#27344b;
+    --ui-control-hover:#33425e;
+    --ui-output:#222e43;
+    --ui-elevated:#253249;
+    --ui-soft:rgba(55,76,110,.48);
+    --ui-glass-border:rgba(158,184,225,.22);
+    --ui-panel-border:rgba(155,182,226,.31);
+    --ui-placeholder:#abbad0;
+    --ui-link:#a9c4ff;
+    --ui-soft-link:#b7cafd;
+    --ui-badge-bg:rgba(104,142,235,.27);
+    --ui-badge-ink:#b9d0ff;
+    --ui-focus:#a1bcff;
+    --ui-selection-bg:rgba(95,146,242,.47);
+    --ui-selection-ink:#ffffff;
+    --ui-toast-bg:rgba(36,49,70,.98);
+    --ui-toast-ink:#eef3ff;
+    --ui-error-ink:#ffc0d0;
+    --ui-error-bg:#50273b;
+    --ui-glass-shadow:0 14px 42px rgba(0,0,0,.32),inset 0 1px rgba(213,227,255,.07);
+    --ui-ambient-1:#223454;
+    --ui-ambient-2:#242139;
+  }
+}
+html[data-theme] body{
+  background:
+    radial-gradient(ellipse at 9% 5%,var(--ui-ambient-1) 0%,transparent 43%),
+    radial-gradient(ellipse at 98% 88%,var(--ui-ambient-2) 0%,transparent 45%),
+    var(--bg);
+  color:var(--ink);
+}
+html[data-theme] .glass{
+  border-color:var(--ui-glass-border);
+  background:var(--surface);
+  box-shadow:var(--ui-glass-shadow);
+}
+html[data-glass="false"] .glass{
+  background:var(--bg);
+  border-color:var(--border);
+  box-shadow:none;
+}
+html[data-theme] :is(input:not([type="checkbox"]),select,textarea){
+  background:var(--ui-control);
+  color:var(--ink);
+  border-color:var(--ui-panel-border);
+  caret-color:var(--ink);
+  -webkit-text-fill-color:var(--ink);
+}
+html[data-theme] :is(input,textarea)::placeholder{
+  color:var(--ui-placeholder);
+  opacity:1;
+  -webkit-text-fill-color:var(--ui-placeholder);
+}
+html[data-theme] select option{
+  background:var(--ui-elevated);
+  color:var(--ink);
+}
+html[data-theme] :is(input,select,textarea):focus-visible{
+  outline:2px solid var(--ui-focus);
+  outline-offset:1px;
+  border-color:var(--ui-focus);
+}
+html[data-theme] :is(input,select,textarea):disabled{
+  opacity:.72;
+  cursor:not-allowed;
+}
+html[data-theme] :is(button,input,textarea,select)::selection,
+html[data-theme] .version-output::selection,
+html[data-theme] .selection-popup ::selection{
+  background:var(--ui-selection-bg);
+  color:var(--ui-selection-ink);
+  -webkit-text-fill-color:var(--ui-selection-ink);
+}
+/* Workspace: explicit selectors override older light-only card rules. */
+html[data-theme] .compare-workspace .toolbar-field select{
+  background:var(--ui-control);
+  border-color:var(--ui-panel-border);
+  color:var(--ink);
+}
+html[data-theme] .compare-workspace .version-input{
+  background:var(--ui-control);
+  border-color:var(--ui-panel-border);
+  color:var(--ink);
+  -webkit-text-fill-color:var(--ink);
+}
+html[data-theme] .compare-workspace .version-output{
+  background:var(--ui-output);
+  border-color:var(--ui-panel-border);
+  color:var(--ink);
+}
+html[data-theme] .compare-workspace .version-output.placeholder{
+  color:var(--ui-placeholder);
+}
+html[data-theme] .compare-workspace .version-card{
+  border-color:var(--ui-glass-border);
+}
+html[data-theme] .compare-workspace .version-count{
+  background:var(--ui-soft);
+  color:var(--muted);
+}
+html[data-theme] .version-number{
+  color:var(--ui-badge-ink);
+  background:var(--ui-badge-bg);
+}
+html[data-theme] :is(.nav-pill,.add-version,.version-actions .translate-one){
+  background:var(--ui-soft);
+  color:var(--ui-link);
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] .nav-item.active{
+  color:var(--ui-link);
+  background:var(--ui-badge-bg);
+}
+html[data-theme] :is(.version-actions,.free-source-actions,.provider-toolbar) button:not(.primary):hover{
+  background:var(--ui-control-hover);
+  color:var(--ink);
+}
+html[data-theme] :is(button.primary,.toolbar-buttons button.primary,.provider-toolbar button.primary){
+  background:linear-gradient(125deg,#4678e4,#6b80e8);
+  color:#fff;
+  -webkit-text-fill-color:#fff;
+  border-color:transparent;
+}
+html[data-theme] .workspace-footer,
+html[data-theme] .translation-engine-name,
+html[data-theme] .version-section-title,
+html[data-theme] .toolbar-field{
+  color:var(--muted);
+}
+html[data-theme] :is(.translation-state[data-state="success"],.probe-result.available){
+  color:#65d7a7;
+}
+html[data-theme] :is(.translation-state[data-state="error"],.probe-result.unavailable,.error-text){
+  color:var(--ui-error-ink);
+}
+/* Word / grammar popup and settings cards share the same palette. */
+html[data-theme] .selection-popup{
+  background:var(--ui-elevated);
+  border-color:var(--ui-glass-border);
+  color:var(--ink);
+}
+html[data-theme] .selection-original,
+html[data-theme] .selection-result,
+html[data-theme] .selection-analysis,
+html[data-theme] .dictionary-definition,
+html[data-theme] .grammar-detail-title{
+  color:var(--ink);
+}
+html[data-theme] :is(.selection-popup-head,.dictionary-details,.selection-ai-section){
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] :is(.selection-tabs button,.reading-actions button){
+  background:var(--ui-control);
+  color:var(--ink);
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] :is(.selection-tabs button.active,.reading-actions button.active){
+  background:var(--ui-badge-bg);
+  color:var(--ui-badge-ink);
+  border-color:var(--ui-focus);
+}
+html[data-theme] :is(.dictionary-pos,.demo-chip){
+  background:var(--ui-badge-bg);
+  color:var(--ui-badge-ink);
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] :is(.analysis-detail,.free-sources-grid .free-source-card){
+  background:var(--ui-output);
+  border-color:var(--ui-panel-border);
+  color:var(--ink);
+}
+html[data-theme] :is(.grammar-token,.grammar-predicate,.grammar-object,.grammar-modifier){
+  color:var(--ink);
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] :is(.grammar-token span,.dictionary-phonetic,.grammar-detail-pos){
+  color:var(--muted);
+}
+html[data-theme] :is(.notice,.fluently-toast){
+  color:var(--ui-toast-ink);
+  background:var(--ui-toast-bg);
+  border:1px solid var(--ui-panel-border);
+}
+html[data-theme] :is(.notice.error,.fluently-toast.error){
+  color:var(--ui-error-ink);
+  background:var(--ui-error-bg);
+}
+html[data-theme] .free-disclaimer,
+html[data-theme] .reader-note,
+html[data-theme] .free-share,
+html[data-theme] .free-summary-right{
+  color:var(--muted);
+}
+html[data-theme] :is(.free-share,.probe-result,.version-alignment-row){
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] .free-participants summary{
+  border-color:var(--ui-panel-border);
+}
+/* Respect reduced transparency without losing dark/light contrast. */
+@media (prefers-reduced-transparency:reduce){
+  html[data-theme] .glass,html[data-theme] .selection-popup,
+  html[data-theme] .fluently-toast{
+    backdrop-filter:none;
+    -webkit-backdrop-filter:none;
+    background:var(--ui-elevated);
+  }
+}
+
+
+/* System Dark must style ordinary buttons too, not only inputs/selects. */
+html[data-theme] button:not(.primary){
+  background:var(--ui-control);
+  color:var(--ink);
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] button:not(.primary):hover{
+  background:var(--ui-control-hover);
+  color:var(--ink);
+}
+html[data-theme] :is(.nav-item,.remove-version,.swap-language){
+  background:transparent;
+  border-color:transparent;
+}
+html[data-theme] :is(.remove-version,.swap-language):hover{
+  background:var(--ui-soft);
+  color:var(--ui-link);
+}
+html[data-theme] .nav-item.active{
+  background:var(--ui-badge-bg);
+  color:var(--ui-link);
+}
+html[data-theme] .nav-item:not(.active):hover{
+  background:var(--ui-soft);
+}
+html[data-theme] :is(.add-version,.nav-pill,.version-actions .translate-one){
+  background:var(--ui-soft);
+  color:var(--ui-link);
+  border-color:var(--ui-panel-border);
+}
+html[data-theme] :is(.selection-tabs button.active,.reading-actions button.active){
+  background:var(--ui-badge-bg);
+  color:var(--ui-badge-ink);
+  border-color:var(--ui-focus);
+}
+html[data-theme] {
+  scrollbar-color:var(--ui-panel-border) var(--bg);
+}

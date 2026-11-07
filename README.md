@@ -138,3 +138,10 @@ B站是翻译专用模型，AI 讲解不一定与通用 LLM 一样充分。可�
 AI 模型服务现在额外支持 **OpenAI Responses API**，可在 GUI 中选择 OpenAI Responses API 预设或在兼容服务的协议下拉框选 Responses。它按照 instructions、input、max_output_tokens 发送请求，并读取 output_text 或 output[].content[].output_text。与 Chat Completions API 不同，请确保所用网关支持 Responses 协议。
 
 **移植范围说明：** 本轮补齐以上 9 类官方文本翻译 API，增加 Responses 协议和相应离线测试；还不包括 FluentRead 的浏览器内置 Chrome Translator、ChatGPT 订阅 OAuth、完整桌面扩展体验以及其它尚未单独适配的厂商翻译协议。部署前需要在 Docker 内进行真实 API 连通性验收，静态代码和模拟测试不能替代真实额度、权限与地区验证。
+
+
+## 深色模式修复（v7）
+
+针对 Edge / macOS 夜间显示问题，已统一「深色」与「跟随系统且系统处于深色」的控件配色：原文输入框、译文区、语言与引擎下拉框、选项、按钮、提示文字、划词词典、AI 句法卡片与设置中心。文本框使用深色背景与浅色文字，避免深色模式中的白字浅底问题。主题值由服务端直接渲染到页面，避免 JS 配置载入前闪白；样式版本提升为 v7，帮助避开浏览器旧缓存。
+
+部署后请执行 git pull origin main && docker compose up -d --build，随后使用浏览器强制刷新（macOS：Cmd+Shift+R）。若看到「英文版本对照」和左右并排的两个旧版本卡片，说明当前仍在使用旧部署或旧浏览器缓存，请先确认容器已更新。

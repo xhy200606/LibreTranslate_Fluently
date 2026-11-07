@@ -63,12 +63,12 @@ def _json_object():
 
 @fluently.get("/fluently")
 def workspace():
-    return render_template("fluently.html")
+    return render_template("fluently.html", initial_theme=read_settings()["ui"]["theme"])
 
 
 @fluently.get("/fluently/settings")
 def settings_page():
-    return render_template("fluently_settings.html")
+    return render_template("fluently_settings.html", initial_theme=read_settings()["ui"]["theme"])
 
 
 @fluently.get("/fluently/api/public")
