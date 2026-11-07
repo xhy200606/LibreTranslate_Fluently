@@ -6,6 +6,7 @@ forwarded. Failure is surfaced to the caller; never present a failed response
 as a successful translation.
 """
 import base64
+import random
 import hashlib
 import html
 import json
@@ -45,7 +46,7 @@ FREE_DEFAULTS = {
     "enabled": ["bilibiliFree", "microsoft", "google", "transmart",
                 "volcengineFree", "myMemory", "apertiumFree"],
     "order": ["bilibiliFree"] + [item[0] for item in CATALOG if item[0] != "bilibiliFree"],
-    "mode": "sequential",
+    "mode": "balanced",
     "timeout": 5,
     "total_timeout": 20,
     "my_memory_email": "",
@@ -574,6 +575,7 @@ class Health:
     success_count: int = 0
     failure_count: int = 0
     last_ms: int = 0
+    selections: int = 0
 
 
 _LOCK = threading.RLock()
@@ -609,26 +611,121 @@ def _report(ident, *, duration=0, error=None, wait=120):
                 record.cooldown_until = time.monotonic() + (min(86400, max(wait, 300)) if error.category in ("blocked", "quota") else wait)
 
 
+# Mirrors FluentRead's source weights; values are priors, not measured traffic.
+BASE_WEIGHTS = {
+    "microsoft": 5, "bilibiliFree": 2, "transmart": 3,
+    "volcengineFree": 3, "doubaoWeb": 1, "google": 3,
+    "youdaoFree": 3, "icibaFree": 3, "yandexFree": 2,
+    "myMemory": 1, "reversoFree": 1, "apertiumFree": 1,
+    "alibabaFree": 3, "modernMtFree": 2, "laraFree": 2,
+    "lingvanexFree": 2,
+}
+
+
+def supports_direction(provider, source, target):
+    """Conservative excludes only known-bad directions; others can fail normally."""
+    normalized_target = normalize_lang(target, target=True)
+    normalized_source = normalize_lang(source, target=False)
+    if provider == "apertiumFree" and (
+        normalized_target in ("zh", "zh-tw", "ja", "ko")
+        or normalized_source in ("zh", "zh-tw", "ja", "ko", "auto")
+    ):
+        return False
+    if provider in {"youdaoFree", "icibaFree"} and (
+        normalized_target not in ("en", "zh")
+        or normalized_source not in ("en", "zh", "auto")
+    ):
+        return False
+    if provider in {"yandexFree", "doubaoWeb"} and normalized_target == "zh-tw":
+        return False
+    return True
+
+
+def _weight(provider, record, now):
+    if record.cooldown_until > now:
+        return 0.0
+    trials = record.success_count + record.failure_count
+    # A smoothed success prior avoids overreacting to a single lucky request.
+    reliability = (record.success_count + 4.0) / (trials + 5.0)
+    # 1 second baseline; faster responses gain weight but do not monopolize pool.
+    speed = max(0.55, min(1.65, 2000 / (1000 + (record.last_ms or 1000))))
+    return BASE_WEIGHTS.get(provider, 1) * reliability * speed
+
+
+def routing_snapshot(settings, source="en", target="zh"):
+    """Estimated selection probabilities, normalized to exactly 100.0%.
+
+    These are dynamic weights used for future draws, NOT historical traffic share.
+    """
+    now = time.monotonic()
+    ids = [id_ for id_ in settings["order"] if id_ in settings["enabled"]]
+    with _LOCK:
+        scores = {
+            ident: (_weight(ident, _HEALTH[ident], now)
+                    if supports_direction(ident, source, target) else 0.0)
+            for ident in ids
+        }
+        state = {
+            ident: {
+                "cooldown": max(0, round(_HEALTH[ident].cooldown_until - now)),
+                "selections": _HEALTH[ident].selections,
+                "success_count": _HEALTH[ident].success_count,
+                "failure_count": _HEALTH[ident].failure_count,
+                "last_ms": _HEALTH[ident].last_ms,
+            }
+            for ident in ids
+        }
+    total = sum(scores.values())
+    if total <= 0:
+        # All candidates in cooldown: do not report a fictional 100% allocation.
+        return {"weights": {ident: 0.0 for ident in ids},
+                "health": state, "active": 0, "total": len(ids),
+                "mode": settings["mode"], "weight_total": 0.0}
+    raw = {ident: 1000 * score / total for ident, score in scores.items()}
+    units = {ident: int(raw[ident]) for ident in ids}
+    leftover = 1000 - sum(units.values())
+    for ident in sorted(ids, key=lambda x: raw[x] - units[x], reverse=True)[:leftover]:
+        units[ident] += 1
+    return {
+        "weights": {ident: units[ident] / 10 for ident in ids},
+        "health": state,
+        "active": sum(score > 0 for score in scores.values()),
+        "total": len(ids),
+        "mode": settings["mode"],
+        "weight_total": 100.0,
+    }
+
+
+def _candidate_weights(remaining, source, target):
+    now = time.monotonic()
+    with _LOCK:
+        return [
+            (_weight(ident, _HEALTH[ident], now)
+             if supports_direction(ident, source, target) else 0.0)
+            for ident in remaining
+        ]
+
+
 def translate_with_fallback(text, source, target, settings):
     enabled = [ident for ident in settings["order"] if ident in settings["enabled"]]
     if not enabled:
         raise FreeProtocolError("没有启用任何免费服务", 400, "request")
-    if settings["mode"] == "balanced":
-        with _LOCK:
-            enabled.sort(key=lambda key: (
-                _HEALTH[key].cooldown_until > time.monotonic(),
-                (_HEALTH[key].last_ms or 1000) * (1 + _HEALTH[key].failure_count) /
-                (1 + _HEALTH[key].success_count),
-            ))
     deadline = time.monotonic() + settings["total_timeout"]
     errors = []
-    for ident in enabled:
-        if time.monotonic() >= deadline:
+    remaining = list(enabled)
+    while remaining and time.monotonic() < deadline:
+        weights = _candidate_weights(remaining, source, target)
+        if not any(weights):
             break
+        if settings["mode"] == "balanced":
+            # Weighted sampling without replacement. Failures trigger fallback
+            # but never bypass a service's normal cooldown/rate limit.
+            ident = random.choices(remaining, weights=weights, k=1)[0]
+        else:
+            ident = next(item for item, weight in zip(remaining, weights) if weight > 0)
+        remaining.remove(ident)
         with _LOCK:
-            if _HEALTH[ident].cooldown_until > time.monotonic():
-                errors.append({"id": ident, "error": "冷却中"})
-                continue
+            _HEALTH[ident].selections += 1
         started = time.monotonic()
         try:
             result = translate(ident, text, source, target, settings, deadline=deadline)

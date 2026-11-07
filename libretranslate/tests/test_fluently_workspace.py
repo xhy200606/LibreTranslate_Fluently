@@ -145,4 +145,4 @@ def test_comparison_template_single_engine_and_shared_word_popup():
     assert "showSelectedText(version, 'source'" in js
     assert "showSelectedText(version, 'target'" in js
     assert "config.ui.deep_explain" in js
-    assert "translateText(selected, from, to)" in js
+    assert "translateText(selected,source,target)" in js

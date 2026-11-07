@@ -3,19 +3,21 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fluently · 设置</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/fluently.css', v='3') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static',filename='brand/fluently-logo.svg') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fluently.css', v='4') }}">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar glass">
-    <a class="brand" href="{{ url_for('fluently.workspace') }}"><span class="brand-icon">文</span> Fluently</a>
+    <a class="brand" href="{{ url_for('fluently.workspace') }}"><img class="brand-logo" src="{{ url_for('static',filename='brand/fluently-logo.svg') }}" width="36" height="36" alt=""> Fluently</a>
     <div class="aside-label">工作空间</div>
     <a href="{{ url_for('fluently.workspace') }}" class="nav-item">⇄ &nbsp; 翻译工作台</a>
     <div class="aside-label">偏好设置</div>
     <button class="nav-item active" data-tab="appearance">◐ &nbsp; 界面与阅读</button>
     <button class="nav-item" data-tab="free">◎ &nbsp; 免费翻译协议</button>
     <button class="nav-item" data-tab="providers">✦ &nbsp; AI 翻译服务</button>
-    <button class="nav-item" data-tab="prompts">⌘ &nbsp; 提示词与推理</button>
+    <button class="nav-item" data-tab="reading">✦ &nbsp; AI 阅读与词典</button>
+    <button class="nav-item" data-tab="prompts">⌘ &nbsp; 翻译提示词</button>
     <button class="nav-item" data-tab="server">⚙ &nbsp; 服务器参数</button>
     <div class="sidebar-footer">LibreTranslate · Fluently<br>灵感参考 FluentRead</div>
   </aside>
@@ -23,7 +25,7 @@
     <header class="topbar"><div><div class="eyebrow">PREFERENCES</div><h1>设置中心</h1><p>所有日常选项都在这里调整。服务器启动参数保存后需重启。</p></div>
       <div class="top-actions"><span class="lan-label">内网模式 · 无需令牌</span><span id="status" role="status"></span><button id="save" class="primary">保存设置</button></div>
     </header>
-    <div id="notice" class="notice hidden" role="alert"></div>
+    <div id="notice" class="fluently-toast hidden" role="status" aria-live="polite"></div>
     <section class="tab-panel" data-panel="appearance">
       <div class="section-title"><h2>视觉与阅读</h2><p>接近 Apple 的清透圆角风格。设置会应用到翻译工作台。</p></div>
       <div class="glass card">
@@ -31,7 +33,7 @@
         <div class="field-row"><div><h3>液态玻璃</h3><p>半透明背景与柔和模糊</p></div><input type="checkbox" data-ui="glass"></div>
         <div class="field-row"><div><h3>字号</h3><p>工作台正文大小（12–24 px）</p></div><input type="number" min="12" max="24" data-ui="font_size"></div>
         <div class="field-row"><div><h3>默认英文版本数量</h3><p>首页还可随时添加或移除原文框（最多 24 个）</p></div><input type="number" min="1" max="24" data-ui="compare_count"></div>
-        <div class="field-row"><div><h3>默认翻译引擎</h3><p>同一引擎用于翻译所有英文版本；默认 B站免费 AI</p></div><select id="default-engine" data-ui="default_engine"></select></div>
+        <div class="field-row"><div><h3>默认翻译引擎</h3><p>默认智能免费池 · 根据成功率与延迟均衡分流</p></div><select id="default-engine" data-ui="default_engine"></select></div>
         <div class="field-row"><div><h3>句子对齐方式</h3><p>结构对齐无需 AI 额度；语义对齐使用第一个已启用的 AI 服务</p></div><select data-ui="alignment_mode"><option value="heuristic">本地结构对齐</option><option value="ai">AI 语义对齐（失败自动降级）</option></select></div>
         <div class="field-row"><div><h3>双语对应高亮</h3><p>悬停句子时同步突出原文与译文</p></div><input type="checkbox" data-ui="highlight"></div>
         <div class="field-row"><div><h3>AI 上下文解析</h3><p>与划词翻译共用弹出卡片，在译文下方显示解析</p></div><input type="checkbox" data-ui="deep_explain"></div>
@@ -45,7 +47,7 @@
       <div class="section-title"><h2>免费翻译协议中心</h2><p>参考 FluentRead 的 16 路免费服务目录；独立启停、顺序、匿名连接测试与失败换线。</p></div>
       <div class="glass card stack">
         <div class="field-row"><div><h3>翻译调度模式</h3><p>智能加速根据成功率和延迟优先尝试；顺序模式依次尝试</p></div>
-          <select data-free="mode"><option value="sequential">顺序回退</option><option value="balanced">智能加速</option></select></div>
+          <select data-free="mode"><option value="balanced">均衡负载（默认）</option><option value="sequential">顺序回退</option></select></div>
         <div class="three-columns">
           <label>每个服务超时（秒）<input data-free="timeout" type="number" min="1" max="15"></label>
           <label>整次请求预算（秒）<input data-free="total_timeout" type="number" min="5" max="30"></label>
@@ -56,15 +58,51 @@
           <label>MyMemory 联系邮箱（可选） <input data-free="my_memory_email" type="email" autocomplete="off" placeholder="留空匿名使用"></label>
         </div>
       </div>
-      <div class="section-title free-section-title"><div><h2>免费翻译数据源</h2><p>小卡片独立启停与测试；一键探测全部 16 个服务，自动启用成功的数据源。</p></div><div class="probe-actions"><span id="probe-summary" role="status">尚未探测</span><button id="probe-all" type="button" class="primary">探测全部并启用可用源</button></div></div>
-      <div id="free-providers-list" class="stack"></div>
+      <div class="section-title free-section-title"><div><h2>参与翻译的服务</h2><p>显示预计分流权重；统计不代表已发生的流量。</p></div><div class="probe-actions"><span id="probe-summary" role="status">尚未探测</span><button id="probe-all" type="button" class="primary">探测并启用可用源</button></div></div>
+      <details class="glass free-participants" open>
+        <summary><strong>数据源与分流权重</strong><span class="free-summary-right"><span id="free-enabled-count"></span><span id="free-weight-total"></span></span></summary>
+        <div class="free-participants-content">
+          <p class="free-disclaimer">权重根据供应商响应速度、成功率和冷却状态变化。0% 表示当前不会被选中；实际流量请参考已发送次数。</p>
+          <div id="free-providers-list" class="free-sources-grid"></div>
+        </div>
+      </details>
       <p class="hint">网页匿名接口不是官方承诺的长期公共 API，可能遇到限流、访问验证或协议变更。免费额度与供应商政策各自独立；连接测试只发送固定示例句。</p>
     </section>
     <section class="tab-panel hidden" data-panel="providers">
-      <div class="section-title"><h2>其他 AI 翻译服务</h2><p>默认使用 B站 Index-Translate 免费模型；也可在这里添加 OpenAI 兼容接口。首页始终只选一个引擎。</p></div>
+      <div class="section-title"><h2>AI 服务预设</h2><p>常见 OpenAI 兼容服务，以及 Claude Messages、Gemini generateContent、Azure OpenAI。选择模板后填写密钥与有效模型 ID。</p></div>
+      <div class="glass card preset-picker"><label>服务模板 <select id="provider-preset"></select></label><button id="add-provider" type="button" class="primary">＋ 添加服务</button></div>
       <div id="providers-list" class="stack"></div>
-      <button id="add-provider" class="add-button">＋ 添加翻译服务</button>
       <p class="hint">API Key 只传送给本机服务端并保存于持久卷；保存后的真实 Key 不会返回浏览器。填写新 Key 才会替换旧值；留空保持不变。</p>
+    </section>
+    <section class="tab-panel hidden" data-panel="reading">
+      <div class="section-title"><h2>AI 深入讲解与词典</h2><p>参考 FluentRead 的阅读卡片：大意、句法、用法、练习，结合当前版本全文解释。</p></div>
+      <div class="glass card reading-settings stack">
+        <div class="two-columns">
+          <label>AI 讲解服务 <select id="reading-provider"></select></label>
+          <label>英文词典来源 <select id="dictionary-source"></select></label>
+          <label>学习程度
+            <select id="learning-level"><option value="beginner">初级</option><option value="intermediate">中级</option><option value="advanced">高级</option></select>
+          </label>
+          <label>回答深度
+            <select id="explanation-depth"><option value="concise">简洁</option><option value="detailed">详细</option></select>
+          </label>
+        </div>
+        <div class="reader-note">词典：ECDICT 本地、网易有道、Free Dictionary API、Wiktionary、WiktApi、Datamuse。AI 模型如选择 B站免费服务，语法分析效果可能有限。</div>
+      </div>
+      <div class="section-title"><h2>阅读卡片提示词</h2><p>支持 {{ "{{to}}" }}、{{ "{{learningLevel}}" }}、{{ "{{explanationDepth}}" }} 占位符；可在 GUI 里逐项修改。</p></div>
+      <div class="glass card stack">
+        <label>系统提示词<textarea data-reading-prompt="system" rows="4"></textarea></label>
+        <label>大意释义<textarea data-reading-prompt="meaning" rows="3"></textarea></label>
+        <label>句法结构<textarea data-reading-prompt="grammar" rows="5"></textarea></label>
+        <label>表达用法<textarea data-reading-prompt="usage" rows="3"></textarea></label>
+        <label>迁移练习<textarea data-reading-prompt="practice" rows="3"></textarea></label>
+        <div class="reading-actions-toolbar"><button id="reset-reading-prompts" type="button">恢复 FluentRead 风格默认提示词</button></div>
+      </div>
+      <div class="section-title"><h2>卡片外观预览</h2><p>仅本地示例，不发送任何请求。</p></div>
+      <div class="glass card demo-preview">
+        <div class="reading-actions"><button data-demo-mode="word" class="active" type="button">单词</button><button data-demo-mode="sentence" type="button">句子</button></div>
+        <div id="reading-demo"><strong>curious</strong><p>好奇的；求知欲强的</p><div class="dictionary-meta"><span class="dictionary-pos">形容词 · adj.</span><span>/ˈkjʊəriəs/</span></div><p>Eager to know or learn something.</p></div>
+      </div>
     </section>
     <section class="tab-panel hidden" data-panel="prompts">
       <div class="section-title"><h2>提示词与推理</h2><p>按 FluentRead 的服务独立配置思路，统一定制 AI 翻译和深度讲解。</p></div>
@@ -85,6 +123,6 @@
     </section>
   </main>
 </div>
-<script src="{{ url_for('static', filename='js/fluently_settings.js', v='3') }}"></script>
+<script src="{{ url_for('static', filename='js/fluently_settings.js', v='4') }}"></script>
 </body>
 </html>

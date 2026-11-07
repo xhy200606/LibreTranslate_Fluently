@@ -14,6 +14,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .free_providers import FREE_DEFAULTS, CATALOG_IDS, CATALOG_PUBLIC
+from .reading_presets import READING_DEFAULTS, ALLOWED_PROTOCOLS, public_presets, reading_prompts_copy
+from .word_dictionary import SOURCE_IDS, SOURCES
 
 _LOCK = threading.RLock()
 SECRET_OPTIONS = {
@@ -41,7 +43,7 @@ DEFAULT_UI = {
     "compare_count": 2, "highlight": True, "deep_explain": True,
     "auto_translate": False, "source_language": "en",
     "target_language": "zh", "debounce_ms": 650,
-    "default_engine": "bilibiliFree",
+    "default_engine": "freeAuto",
     "alignment_mode": "heuristic",
 }
 DEFAULT_AI = {
@@ -56,6 +58,7 @@ DEFAULT_AI = {
         "contextual meaning, grammar, nuances, alternative translations and examples."
     ),
     "temperature": 0.2, "timeout": 60, "max_tokens": 2048,
+    "reading": copy.deepcopy(READING_DEFAULTS),
 }
 PROVIDER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 LANGUAGE_CODE = re.compile(r"^(auto|[a-zA-Z]{2,4}(-[a-zA-Z]{2,4})?)$")
@@ -85,6 +88,20 @@ def _read_unlocked():
         if not isinstance(incoming, dict):
             raise ValueError("Invalid settings group: " + group)
         value[group].update(incoming)
+    if isinstance(saved.get("ai", {}).get("reading"), dict):
+        current = copy.deepcopy(READING_DEFAULTS)
+        current.update(saved["ai"]["reading"])
+        current["prompts"] = {**READING_DEFAULTS["prompts"],
+                             **(saved["ai"]["reading"].get("prompts", {}) or {})}
+        value["ai"]["reading"] = current
+    # One-time migration from v3's old default: a pinned Bilibili engine and
+    # sequential free pool. Preserve explicit choices made after this schema.
+    legacy = saved.get("ai", {})
+    if "reading" not in legacy:
+        if saved.get("ui", {}).get("default_engine") == "bilibiliFree":
+            value["ui"]["default_engine"] = "freeAuto"
+        if saved.get("free", {}).get("mode") == "sequential":
+            value["free"]["mode"] = "balanced"
     return value
 
 
@@ -242,7 +259,7 @@ def _provider(value, prior=None):
     if not isinstance(value, dict):
         raise ValueError("Invalid provider")
     allowed = {"id", "name", "base_url", "model", "enabled", "api_key",
-               "clear_api_key"}
+               "clear_api_key", "protocol", "service_id"}
     if set(value) - allowed:
         raise ValueError("Unknown provider fields")
     ident = value.get("id")
@@ -257,10 +274,16 @@ def _provider(value, prior=None):
     enabled = value.get("enabled", True)
     if type(enabled) is not bool:
         raise ValueError("enabled must be a boolean")
+    protocol = value.get("protocol", "openai")
+    if protocol not in ALLOWED_PROTOCOLS:
+        raise ValueError("Unsupported AI provider protocol")
+    service_id = value.get("service_id", "custom")
+    if not isinstance(service_id, str) or len(service_id) > 64:
+        raise ValueError("Invalid provider service ID")
     result = {
         "id": ident, "name": name.strip(), "model": model.strip(),
         "base_url": validate_base_url(value.get("base_url")),
-        "enabled": enabled,
+        "enabled": enabled, "protocol": protocol, "service_id": service_id,
     }
     if value.get("clear_api_key") is True:
         result["api_key"] = ""
@@ -286,9 +309,32 @@ def validate_ai(value, previous=None):
     _bounded(result["temperature"], "temperature", 0, 2, integer=False)
     _bounded(result["timeout"], "timeout", 5, 180)
     _bounded(result["max_tokens"], "max_tokens", 64, 8192)
+    reading = result["reading"]
+    if not isinstance(reading, dict) or set(reading) - set(READING_DEFAULTS):
+        raise ValueError("Invalid reading configuration")
+    normalized = copy.deepcopy(READING_DEFAULTS)
+    normalized.update(reading)
+    if normalized["learning_level"] not in ("beginner", "intermediate", "advanced"):
+        raise ValueError("Unknown learning level")
+    if normalized["explanation_depth"] not in ("concise", "detailed"):
+        raise ValueError("Unknown explanation depth")
+    if normalized["selected_action"] not in ("meaning", "grammar", "usage", "practice"):
+        raise ValueError("Unknown reading action")
+    if normalized["dictionary_source"] not in SOURCE_IDS:
+        raise ValueError("Unknown dictionary source")
+    if not isinstance(normalized["analysis_provider_id"], str) or not PROVIDER_ID.fullmatch(normalized["analysis_provider_id"]):
+        raise ValueError("Invalid analysis provider")
+    prompts = normalized["prompts"]
+    if not isinstance(prompts, dict) or set(prompts) - set(READING_DEFAULTS["prompts"]):
+        raise ValueError("Unknown reading prompt")
+    normalized["prompts"] = {**READING_DEFAULTS["prompts"], **prompts}
+    for key, text in normalized["prompts"].items():
+        if not isinstance(text, str) or not 1 <= len(text) <= 6000:
+            raise ValueError("Invalid reading prompt: " + key)
+    result["reading"] = normalized
     entries = value.get("providers", previous.get("providers", []))
-    if not isinstance(entries, list) or len(entries) > 12:
-        raise ValueError("Provide no more than 12 AI providers")
+    if not isinstance(entries, list) or len(entries) > 32:
+        raise ValueError("Provide no more than 32 AI providers")
     old = {p["id"]: p for p in previous.get("providers", [])}
     providers = [_provider(p, old.get(p.get("id"))) for p in entries]
     if len({p["id"] for p in providers}) != len(providers):
@@ -328,11 +374,16 @@ def public_settings():
         "ai": {
             "providers": [
                 {"id": p["id"], "name": p["name"], "model": p["model"],
-                 "enabled": p.get("enabled", True)}
+                 "enabled": p.get("enabled", True),
+                 "protocol": p.get("protocol", "openai")}
                 for p in data["ai"]["providers"]
             ],
         },
-        "free": {"catalog": CATALOG_PUBLIC, "enabled": data["free"]["enabled"]},
+        "free": {"catalog": CATALOG_PUBLIC, "enabled": data["free"]["enabled"],
+                 "mode": data["free"]["mode"]},
+        "reading": {"dictionary_source": data["ai"]["reading"]["dictionary_source"],
+                    "analysis_provider_id": data["ai"]["reading"]["analysis_provider_id"],
+                    "selected_action": data["ai"]["reading"]["selected_action"]},
         "admin_enabled": bool(os.environ.get("LT_SETTINGS_ADMIN_TOKEN")),
     }
 
@@ -345,6 +396,9 @@ def admin_settings(option_definitions):
         "ui": data["ui"], "ai": data["ai"],
         "server": server_schema(option_definitions),
         "free": dict(data["free"], catalog=CATALOG_PUBLIC),
+        "ai_presets": public_presets(),
+        "reading_defaults": reading_prompts_copy(),
+        "dictionary_sources": SOURCES,
     }
 
 

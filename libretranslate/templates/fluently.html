@@ -1,24 +1,25 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f5f7fc">
 <title>Fluently · 多版本翻译对照</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/fluently.css', v='3') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static',filename='brand/fluently-logo.svg') }}">
+<link rel="stylesheet" href="{{ url_for('static',filename='css/fluently.css',v='4') }}">
 </head>
 <body>
 <div class="workspace-shell">
   <header class="workspace-header glass">
     <a href="{{ url_for('fluently.workspace') }}" class="brand">
-      <span class="brand-icon">文</span> Fluently
+      <img class="brand-logo" src="{{ url_for('static',filename='brand/fluently-logo.svg') }}" width="36" height="36" alt="">
+      <span>Fluently</span>
     </a>
     <nav aria-label="导航">
       <a href="/">LibreTranslate</a>
-      <a href="{{ url_for('fluently.settings_page') }}" class="nav-pill">⚙ 设置中心</a>
+      <a href="{{ url_for('fluently.settings_page') }}" class="nav-pill">⚙ 设置</a>
     </nav>
   </header>
   <main class="workspace-main compare-workspace">
-    <div class="notice hidden" id="notice" role="status" aria-live="polite"></div>
     <section class="workspace-controls glass" aria-label="翻译选项">
       <div class="translate-toolbar">
         <label class="toolbar-field">原文语言
@@ -32,38 +33,57 @@
           <select id="engine" aria-label="翻译引擎"></select>
         </label>
         <div class="toolbar-buttons">
+          <span id="version-count" class="version-count">2 个版本</span>
           <button id="add-version" type="button" class="add-version">＋ 添加版本</button>
           <button id="translate" type="button" class="primary">翻译并对照</button>
         </div>
       </div>
     </section>
-    <section class="versions-heading">
-      <div>
-        <h1>英文版本对照</h1>
-        <p>每个卡片输入一个不同的英文版本，统一使用同一个引擎翻译，再比较表达与逻辑。</p>
-      </div>
-      <span id="version-count" class="version-count">2 个版本</span>
-    </section>
     <section id="versions" class="versions-grid" aria-label="多版本原文与译文"></section>
     <div class="workspace-footer">
-      <span>划选原文或译文即可弹出翻译卡片；AI 上下文解析在卡片下方显示。</span>
-      <button id="add-version-bottom" type="button" class="add-version">＋ 添加对照版本</button>
+      <span>选中词语或句子即可查看释义与语法。</span>
+      <button id="add-version-bottom" type="button" class="add-version">＋ 添加版本</button>
     </div>
   </main>
 </div>
 
+<div class="toast-viewport" aria-live="polite" aria-atomic="true">
+  <div id="notice" class="fluently-toast hidden" role="status"></div>
+</div>
+
 <aside class="selection-popup glass hidden" id="selection-popup" role="dialog" aria-label="划词翻译与上下文解析" aria-live="polite">
-  <div class="selection-popup-head">
-    <span class="selection-mark">✦</span><strong>划词翻译</strong>
-    <button id="close-selection" type="button" aria-label="关闭划词卡片">✕</button>
-  </div>
+  <header class="selection-popup-head">
+    <div class="selection-title"><img src="{{ url_for('static',filename='brand/fluently-logo.svg') }}" alt="" width="24" height="24"><strong>划词翻译</strong></div>
+    <button id="close-selection" type="button" aria-label="关闭卡片">×</button>
+  </header>
+  <nav class="selection-tabs" aria-label="划词模式">
+    <button class="active" type="button" data-selection-mode="word">单词</button>
+    <button type="button" data-selection-mode="sentence">句子</button>
+  </nav>
   <div id="selection-original" class="selection-original"></div>
   <div id="selection-translation" class="selection-result">正在翻译…</div>
-  <section id="selection-ai-section" class="selection-ai-section hidden">
-    <div class="selection-ai-head">AI 上下文解析 <span>结合当前版本全文</span></div>
+  <section id="dictionary-details" class="dictionary-details hidden" aria-label="词典资料">
+    <div class="dictionary-meta">
+      <span id="dictionary-pos" class="dictionary-pos"></span>
+      <span id="dictionary-phonetic" class="dictionary-phonetic"></span>
+      <span id="dictionary-source" class="dictionary-source"></span>
+    </div>
+    <p id="dictionary-definition" class="dictionary-definition"></p>
+    <p id="dictionary-example" class="dictionary-example"></p>
+  </section>
+  <section id="selection-ai-section" class="selection-ai-section hidden" aria-label="AI 阅读讲解">
+    <div class="selection-ai-head">AI 深入讲解 <span id="reading-provider-label"></span></div>
+    <div class="reading-actions" role="group" aria-label="讲解模式">
+      <button data-reading-action="meaning" type="button">大意</button>
+      <button data-reading-action="grammar" type="button">句法</button>
+      <button data-reading-action="usage" type="button">用法</button>
+      <button data-reading-action="practice" type="button">练习</button>
+    </div>
+    <div id="analysis-structure" class="analysis-structure hidden" aria-label="句法结构"></div>
+    <div id="analysis-detail" class="analysis-detail hidden"></div>
     <div id="selection-analysis" class="selection-analysis"></div>
   </section>
 </aside>
-<script src="{{ url_for('static', filename='js/fluently.js', v='3') }}"></script>
+<script src="{{ url_for('static',filename='js/fluently.js',v='4') }}"></script>
 </body>
 </html>

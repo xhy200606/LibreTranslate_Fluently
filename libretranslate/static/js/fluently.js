@@ -3,7 +3,7 @@
   const $ = selector => document.querySelector(selector);
   let config = {
     ui: {compare_count: 2, theme:'system', glass:true, font_size:16, source_language:'en',
-         target_language:'zh', default_engine:'bilibiliFree', highlight:true,
+         target_language:'zh', default_engine:'freeAuto', highlight:true,
          deep_explain:true, auto_translate:false, debounce_ms:650, alignment_mode:'heuristic'},
     ai:{providers:[]}, free:{catalog:[],enabled:[]},
   };
@@ -11,6 +11,8 @@
   let nextId = 0;
   let selectionSequence = 0;
   let autoTimers = new Map();
+  let toastTimer = null;
+  let currentSelection = null;
 
   const textNode = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -19,10 +21,13 @@
     return node;
   };
   const status = (message, isError = false) => {
-    const el = $('#notice');
-    el.textContent = message || '';
-    el.classList.toggle('hidden', !message);
-    el.classList.toggle('error', isError);
+    const node = $('#notice');
+    if (!node) return;
+    clearTimeout(toastTimer);
+    node.textContent = message || '';
+    node.classList.toggle('hidden',!message);
+    node.classList.toggle('error',isError);
+    if (message) toastTimer = setTimeout(() => node.classList.add('hidden'),3600);
   };
   async function post(path, body) {
     const response = await fetch(path, {
@@ -75,8 +80,8 @@
     const select = $('#engine');
     select.replaceChildren();
     const list = [
+      {id:'freeAuto',name:'智能免费翻译池 · '+(config.free?.mode === 'sequential' ? '顺序回退' : '均衡负载')},
       {id:'bilibiliFree',name:'B站 Index-Translate · 免费 AI'},
-      {id:'freeAuto',name:'智能免费翻译池 · 自动换线'},
       ...config.free.catalog.filter(p => freeEnabled(p.id) && p.id !== 'bilibiliFree'),
       {id:'libretranslate',name:'LibreTranslate · Argos 本地'},
       ...config.ai.providers.filter(p => p.enabled),
@@ -90,7 +95,7 @@
       opt.value = item.id;
       select.append(opt);
     });
-    const preferred = config.ui.default_engine || 'bilibiliFree';
+    const preferred = config.ui.default_engine || 'freeAuto';
     if (seen.has(preferred)) select.value = preferred;
     else select.value = seen.has('freeAuto') ? 'freeAuto' : (list.find(x=>seen.has(x.id))?.id || '');
   }
@@ -315,17 +320,147 @@
   function placePopup(event, host) {
     const popup = $('#selection-popup');
     const rect = host.getBoundingClientRect();
-    const width = Math.min(390, window.innerWidth - 24);
+    const width = Math.min(500, window.innerWidth - 24);
     popup.style.width = width + 'px';
-    const pointerX = event && event.clientX ? event.clientX : rect.left + rect.width/2;
-    const pointerY = event && event.clientY ? event.clientY : rect.top + 45;
-    const left = Math.max(12,Math.min(pointerX + 12,window.innerWidth - width - 12));
-    const above = pointerY + 16 + 300 > window.innerHeight;
-    const top = above ? Math.max(12,pointerY - Math.min(310,window.innerHeight-24)) :
-      Math.max(12,pointerY + 14);
+    const pointerX = event?.clientX ?? (rect.left + rect.width / 2);
+    const pointerY = event?.clientY ?? (rect.top + 40);
+    const left = Math.max(12, Math.min(pointerX + 12, window.innerWidth - width - 12));
+    // Prefer below; shift above when too close to the bottom edge.
+    const estimatedHeight = Math.min(500,window.innerHeight * .7);
+    const top = pointerY + estimatedHeight + 20 > window.innerHeight ?
+      Math.max(12,pointerY - estimatedHeight - 10) : pointerY + 12;
     popup.style.left = left + 'px';
-    popup.style.top = top + 'px';
-    popup.style.maxHeight = 'min(430px, calc(100vh - 24px))';
+    popup.style.top = Math.min(top,window.innerHeight - 96) + 'px';
+    popup.style.maxHeight = 'min(560px, calc(100vh - 24px))';
+  }
+
+  function isEnglishWord(text) {
+    return /^[A-Za-z][A-Za-z'’-]{0,59}$/.test(text.trim());
+  }
+
+  function renderSelectionMode() {
+    if (!currentSelection) return;
+    const mode = currentSelection.mode;
+    document.querySelectorAll('[data-selection-mode]').forEach(button =>
+      button.classList.toggle('active',button.dataset.selectionMode === mode));
+    $('#dictionary-details').classList.toggle('hidden',
+      mode !== 'word' || !currentSelection.dictionary);
+    $('#analysis-structure').classList.add('hidden');
+    $('#analysis-detail').classList.add('hidden');
+    $('#selection-original').textContent = currentSelection.text;
+    if (mode === 'sentence' && config.ui.deep_explain) {
+      loadReading('grammar');
+    } else if (mode === 'word' && currentSelection.dictionary) {
+      drawDictionary(currentSelection.dictionary);
+    }
+  }
+
+  function drawDictionary(card) {
+    if (!card || !currentSelection || currentSelection.mode !== 'word') return;
+    $('#dictionary-details').classList.remove('hidden');
+    const meaning = card.meanings?.[0] || {};
+    $('#dictionary-pos').textContent = meaning.pos || '其他';
+    $('#dictionary-phonetic').textContent = card.phonetic ? '/' + card.phonetic.replace(/^\/|\/$/g,'') + '/' : '';
+    $('#dictionary-source').textContent = (card.sources || []).join(' · ');
+    $('#dictionary-definition').textContent = meaning.definition || meaning.translation || '';
+    $('#dictionary-example').textContent = meaning.example || '';
+    $('#dictionary-example').classList.toggle('hidden',!meaning.example);
+    if (meaning.translation && !currentSelection.translationReady)
+      $('#selection-translation').textContent = meaning.translation;
+  }
+
+  async function queryDictionary(selection) {
+    if (!isEnglishWord(selection.text) || !['en','auto'].includes(selection.source)) return;
+    try {
+      const result = await post('/fluently/api/dictionary',{word:selection.text});
+      if (!currentSelection || currentSelection.id !== selection.id) return;
+      if (!result.card) return;
+      selection.dictionary = result.card;
+      drawDictionary(result.card);
+    } catch (_) {
+      // Dictionary lookup is optional and must never block translation.
+    }
+  }
+
+  function parseGrammarRows(markdown, selection) {
+    const rows = [];
+    for (const line of markdown.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) continue;
+      const cells = trimmed.slice(1,-1).split('|').map(v=>v.trim());
+      if (cells.length !== 4) continue;
+      if (/^(text|文本)$/i.test(cells[0]) || /^[-:\s]+$/.test(cells[0])) continue;
+      if (!cells[0] || !selection.includes(cells[0])) continue;
+      rows.push({text:cells[0],pos:cells[1],role:cells[2],meaning:cells[3]});
+      if (rows.length >= 40) break;
+    }
+    return rows;
+  }
+
+  function displayGrammarRows(rows) {
+    const wrap = $('#analysis-structure');
+    const detail = $('#analysis-detail');
+    wrap.replaceChildren();
+    detail.replaceChildren();
+    if (!rows.length) {
+      wrap.classList.add('hidden');
+      detail.classList.add('hidden');
+      return;
+    }
+    wrap.classList.remove('hidden');
+    detail.classList.remove('hidden');
+    const palettes=['grammar-subject','grammar-predicate','grammar-object','grammar-modifier'];
+    const setActive = index => {
+      wrap.querySelectorAll('button').forEach((button,i) =>
+        button.classList.toggle('selected',i === index));
+      const item=rows[index];
+      detail.replaceChildren();
+      const title=textNode('div','grammar-detail-title',item.text);
+      title.append(textNode('span','grammar-detail-pos',item.pos));
+      detail.append(title, textNode('p','grammar-meaning',item.meaning),
+        textNode('p','grammar-role','句中作用  '+item.role));
+    };
+    rows.forEach((row,index)=>{
+      const button=textNode('button','grammar-token '+palettes[index % palettes.length]);
+      button.type='button';
+      button.append(textNode('strong','',row.text));
+      button.append(textNode('span','',row.role + ' · ' + row.pos));
+      button.addEventListener('click',()=>setActive(index));
+      wrap.append(button);
+    });
+    setActive(0);
+  }
+
+  async function loadReading(action) {
+    if (!currentSelection || !config.ui.deep_explain) return;
+    currentSelection.action = action;
+    const selection = currentSelection;
+    const sequence = selection.id;
+    $('#selection-analysis').textContent = '正在解析…';
+    $('#analysis-structure').classList.add('hidden');
+    $('#analysis-detail').classList.add('hidden');
+    document.querySelectorAll('[data-reading-action]').forEach(button =>
+      button.classList.toggle('active',button.dataset.readingAction === action));
+    const providerLabel = config.ai.providers.find(p => p.id === config.reading?.analysis_provider_id)?.name ||
+      (config.reading?.analysis_provider_id === 'bilibiliFree' ? 'B站 Index-Translate' : '已配置模型');
+    $('#reading-provider-label').textContent = providerLabel;
+    try {
+      const result=await post('/fluently/api/reading',{
+        action, text:selection.text, context:selection.context,
+        target:selection.target,
+      });
+      if (!currentSelection || currentSelection.id !== sequence ||
+          currentSelection.action !== action) return;
+      if (action === 'grammar' && selection.mode === 'sentence') {
+        displayGrammarRows(parseGrammarRows(result.text, selection.text));
+      }
+      $('#selection-analysis').textContent = result.text
+        .replace(/^\|[^|]+\|[^|]+\|[^|]+\|[^|]+\|\s*$/gm,'')
+        .replace(/^#{1,4}\s+/gm,'').trim();
+    } catch(error) {
+      if (currentSelection && currentSelection.id === sequence)
+        $('#selection-analysis').textContent = '解析不可用：' + error.message;
+    }
   }
 
   function showSelectedText(version, side, element, event) {
@@ -340,46 +475,46 @@
       selected = selection.toString().trim();
     }
     if (!selected) return;
-    if (selected.length > 600) {
-      status('单次划词不超过 600 个字符。',true);return;
-    }
-    const selectionId = ++selectionSequence;
-    $('#selection-popup').classList.remove('hidden');
-    $('#selection-original').textContent = selected;
-    $('#selection-translation').textContent = '正在翻译…';
-    $('#selection-ai-section').classList.toggle('hidden',!config.ui.deep_explain);
-    $('#selection-analysis').textContent = config.ui.deep_explain ? '正在分析表达与上下文…' : '';
-    placePopup(event,element);
-    const from = side === 'source' ? $('#source').value : $('#target').value;
-    const to = side === 'source' ? $('#target').value :
+    if (selected.length > 600) {status('单次划词不超过 600 字符。',true);return;}
+    const id = ++selectionSequence;
+    const source = side === 'source' ? $('#source').value : $('#target').value;
+    const target = side === 'source' ? $('#target').value :
       ($('#source').value === 'auto' ? 'en' : $('#source').value);
-    translateText(selected, from, to).then(result => {
-      if (selectionId === selectionSequence)
-        $('#selection-translation').textContent = result.text;
-    }).catch(error => {
-      if (selectionId === selectionSequence)
-        $('#selection-translation').textContent = '翻译失败：' + error.message;
+    const sentence = !isEnglishWord(selected);
+    currentSelection = {
+      id,text:selected,mode:sentence?'sentence':'word',source,target,
+      context:version.text.slice(0,5000), action:sentence?'grammar':'meaning',
+      dictionary:null,translationReady:false,
+    };
+    const popup=$('#selection-popup');
+    popup.classList.remove('hidden');
+    $('#selection-original').textContent=selected;
+    $('#selection-translation').textContent='正在翻译…';
+    $('#dictionary-details').classList.add('hidden');
+    $('#analysis-structure').classList.add('hidden');
+    $('#analysis-detail').classList.add('hidden');
+    $('#selection-ai-section').classList.toggle('hidden',!config.ui.deep_explain);
+    renderSelectionMode();
+    placePopup(event,element);
+    translateText(selected,source,target).then(result=>{
+      if (currentSelection?.id !== id) return;
+      currentSelection.translationReady=true;
+      $('#selection-translation').textContent=result.text;
+    }).catch(error=>{
+      if (currentSelection?.id !== id) return;
+      currentSelection.translationReady=true;
+      $('#selection-translation').textContent='翻译失败：' + error.message;
     });
-    if (!config.ui.deep_explain) return;
-    const preferred = providerById(engineId());
-    const expert = preferred || config.ai.providers.find(p=>p.enabled);
-    const providerId = expert ? expert.id : 'bilibiliFree';
-    post('/fluently/api/ai', {
-      action:'explain',provider_id:providerId,text:selected,
-      context:version.text.slice(0,5000),source:from,target:to,
-    }).then(result => {
-      if (selectionId === selectionSequence)
-        $('#selection-analysis').textContent = result.text;
-    }).catch(error => {
-      if (selectionId === selectionSequence)
-        $('#selection-analysis').textContent = '暂时无法解析：' + error.message;
-    });
+    if (isEnglishWord(selected) && ['en','auto'].includes(source)) queryDictionary(currentSelection);
+    if (config.ui.deep_explain && !sentence) loadReading('meaning');
   }
 
   function closeSelection() {
     selectionSequence++;
+    currentSelection = null;
     $('#selection-popup').classList.add('hidden');
   }
+
   async function boot() {
     try {
       const settingsResponse = await fetch('/fluently/api/public',{cache:'no-store'});
@@ -452,6 +587,15 @@
     $('#target').value = a === 'auto' ? 'en' : a;
     invalidateTranslations();
   });
+  document.querySelectorAll('[data-selection-mode]').forEach(button =>
+    button.addEventListener('click', () => {
+      if (!currentSelection) return;
+      currentSelection.mode = button.dataset.selectionMode;
+      renderSelectionMode();
+      if (currentSelection.mode === 'word') loadReading('meaning');
+    }));
+  document.querySelectorAll('[data-reading-action]').forEach(button =>
+    button.addEventListener('click',()=>loadReading(button.dataset.readingAction)));
   $('#close-selection').addEventListener('click',closeSelection);
   document.addEventListener('keydown',event=>{
     if (event.key === 'Escape') closeSelection();

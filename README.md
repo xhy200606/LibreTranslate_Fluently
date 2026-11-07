@@ -28,7 +28,7 @@ docker compose up -d --build
 
 ## 默认翻译引擎
 
-默认选择 **B站 Index-Translate · 免费 AI**，服务端调用 Bilibili 官方公开的 OpenAI 兼容 API：
+默认选择 **智能免费翻译池 · 均衡负载**，服务端调用 Bilibili 官方公开的 OpenAI 兼容 API：
 
 - API：https://index-translate.bilibili.com/v1/chat/completions
 - 模型：Index-Translate-35B-A3B
@@ -65,3 +65,42 @@ B站是翻译专用模型，AI 讲解不一定与通用 LLM 一样充分。可�
 离线测试覆盖：16 路探测的状态、B站请求结构、无令牌内网 GUI、跨源写入拒绝、分句对齐和输入验证。真实 Docker 构建、供应商实际连通性与浏览器交互仍需进行部署验收。匿名网页协议不是稳定保证的公共 API。
 
 遵循 [LibreTranslate AGPL-3.0](LICENSE) 授权。FluentRead 仅为设计与功能参考。
+
+
+## v4 · 自动分流、阅读卡片和 API 预设
+
+### 默认均衡负载
+
+新的默认翻译引擎为 **智能免费翻译池**，默认模式为 balanced。它按照 FluentRead 免费服务目录的基础权重、已观察到的成功率与响应速度计算预计分流比例，在可用节点中按权重随机挑选。失败时从剩余节点重试，不绕过冷却及语言支持限制。
+
+设置中心可以看到每个已启用服务的预计分流百分比、历史选中次数与当前状态。预计权重不是实际流量份额。健康信息暂存每个 Gunicorn 工作进程内存中，重启后清零，不在进程间共享；启停数据仍通过 GUI 持久化。免费来源可能限流或变更，请务必在内网使用，并遵守各供应商的服务协议。
+
+### 划词卡片
+
+- 单词模式：上方显示中文译文，下方展示词典的词性、音标、英文释义与例句。
+- 句子模式：显示译文、AI 大意、句法、用法、练习。句法分析按 FluentRead 约定的四列 Text / POS / Role / Meaning 提取语法片段，以可点击彩色卡片显示词性、句中作用与含义。AI 可能输出不完整结构，需人工确认。
+- 解析可独立开关，使用独立选定的模型和学习提示词；其他英文版本的原文不会混入当前卡片上下文。
+- 词典来源遵循 FluentRead 的六类：ECDICT 本地、网易有道、Free Dictionary API、Wiktionary REST、WiktAPI、Datamuse。自动模式优先本地 ECDICT，未命中后查在线词典。随项目保留 MIT 授权下的 ECDICT 常用 3,000 词条与原始授权说明，文件在 libretranslate/static/data/ecdict-core.LICENSE.md。词典参考项目为 https://github.com/skywind3000/ECDICT。
+
+### AI 服务 API 预设
+
+设置中心新增 29 种服务模板，包括 B站 Index-Translate（内置免 Key）、OpenAI、DeepSeek、通义、智谱、Kimi、豆包、Claude、Gemini、Azure OpenAI、OpenRouter、SiliconFlow、Groq、Mistral、Together、MiniMax、xAI、Ollama、LM Studio、NewAPI 等。
+
+当前真正支持四种后台接口：OpenAI Chat Completions 兼容、Anthropic Messages、Gemini generateContent 和 Azure OpenAI Chat Completions。各模板包含名称、URL、协议与参考模型，但不赠送 API 密钥，也不保证模板中的模型版本仍可调用。FluentRead 特有的 Chrome 浏览器本地翻译、ChatGPT 订阅 OAuth、以及需要云服务签名的专业机器翻译 API 仍须单独适配；本项目不会把未接入的协议标为可用。
+
+阅读卡片默认提示词按 FluentRead 的系统、大意、句法、用法、练习五类正文提供可编辑配置，保留学习程度、回答深度以及目标语言变量（to、learningLevel、explanationDepth）。提示词正文引自 FluentRead（GPL-3.0），许可证和来源说明随 third_party/FluentRead.NOTICE.md 保留；其它程序为本项目独立实现。
+
+### 界面
+
+首页移除了「英文版本对照」大标题和多余提示段落，收紧原文语言、目标语言、翻译引擎工具栏。普通消息提示改为顶部右侧浮层 Toast。Fluently SVG Logo 同时用于导航栏、设置界面与 favicon。
+
+### 新增服务端 API
+
+- GET /fluently/api/free/routing?source=en&target=zh — 获取预计权重与健康统计
+- POST /fluently/api/dictionary — 单词查询；例：{"word":"curious","source":"auto"}
+- POST /fluently/api/reading — 学习解析；例：{"text":"Every language offers.","context":"...","action":"grammar","target":"zh"}
+- GET /fluently/api/reading/catalog — 阅读模型模板及词典目录
+
+所有选中的词或句子及其必要上下文可能发送到配置的第三方词典/AI 服务。隐私优先时选用 ECDICT 本地词库和可信本地大模型。
+
+第三方参考：[FluentRead](https://github.com/FluentRead/FluentRead)。词典来源 [ECDICT](https://github.com/skywind3000/ECDICT) 遵循 MIT，许可文件与数据同目录保留。上游 LibreTranslate 继续遵循 AGPL-3.0。
