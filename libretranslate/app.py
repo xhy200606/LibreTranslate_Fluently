@@ -1316,6 +1316,10 @@ def create_app(args):
 
     app.register_blueprint(bp)
 
+    # Independent Fluently GUI / AI endpoints, preserving the original APIs.
+    from .fluently import fluently
+    app.register_blueprint(fluently)
+
     limiter.init_app(app)
 
     swag = swagger(app)

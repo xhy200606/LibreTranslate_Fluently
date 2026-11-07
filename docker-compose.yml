@@ -1,10 +1,21 @@
 services:
   libretranslate:
     container_name: libretranslate
-    image: libretranslate/libretranslate:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: libretranslate-fluently:local
     ports:
       - "5000:5000"
     restart: unless-stopped
+    environment:
+      LT_SETTINGS_ADMIN_TOKEN: ${LT_SETTINGS_ADMIN_TOKEN:?Set LT_SETTINGS_ADMIN_TOKEN in .env}
+      LT_GUI_SETTINGS_PATH: /app/db/gui_settings.json
+      # Allow remote private-network model servers only when trusted.
+      LT_AI_ALLOW_PRIVATE_NETWORK: ${LT_AI_ALLOW_PRIVATE_NETWORK:-false}
+    volumes:
+      - fluently_data:/app/db
+      - fluently_models:/home/libretranslate/.local
     healthcheck:
       test: ['CMD-SHELL', './venv/bin/python scripts/healthcheck.py']
       interval: 10s
@@ -31,3 +42,7 @@ services:
 # volumes:
 #   libretranslate_api_keys:
 #   libretranslate_models:
+
+volumes:
+  fluently_data:
+  fluently_models:

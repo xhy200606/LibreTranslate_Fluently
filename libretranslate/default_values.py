@@ -250,3 +250,8 @@ _default_options_objects = [
 
 
 DEFAULT_ARGUMENTS = {obj['name']: _get_value(**obj) for obj in _default_options_objects}
+
+# GUI configuration overrides static defaults on restart. Environment is still
+# available as the bootstrap/fallback for fresh deployments.
+from .gui_settings import load_server_overrides
+DEFAULT_ARGUMENTS.update(load_server_overrides(_default_options_objects))
