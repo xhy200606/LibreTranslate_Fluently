@@ -14,11 +14,11 @@ from libretranslate.fluently_probe import probe_all
 from libretranslate.gui_settings import DEFAULT_UI, read_settings, validate_ui
 
 
-def test_comparison_defaults_use_bilibili_and_english_to_chinese():
+def test_comparison_defaults_use_balanced_pool_and_english_to_chinese():
     assert DEFAULT_UI["compare_count"] == 2
     assert DEFAULT_UI["source_language"] == "en"
     assert DEFAULT_UI["target_language"] == "zh"
-    assert DEFAULT_UI["default_engine"] == "bilibiliFree"
+    assert DEFAULT_UI["default_engine"] == "freeAuto"
     assert FREE_DEFAULTS["order"][0] == "bilibiliFree"
     assert validate_ui({"compare_count": 24})["compare_count"] == 24
     with pytest.raises(ValueError):
@@ -73,7 +73,7 @@ def client(tmp_path, monkeypatch):
 def test_lan_settings_work_without_token(client):
     response = client.get("/fluently/api/settings")
     assert response.status_code == 200
-    assert response.get_json()["ui"]["default_engine"] == "bilibiliFree"
+    assert response.get_json()["ui"]["default_engine"] == "freeAuto"
     update = client.put("/fluently/api/settings", json={
         "ui":{"theme":"dark","compare_count":4},
     })
