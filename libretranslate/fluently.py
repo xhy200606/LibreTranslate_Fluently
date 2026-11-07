@@ -5,7 +5,7 @@ import ipaddress
 import json
 import os
 import socket
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 import re
@@ -15,6 +15,7 @@ from flask import Blueprint, abort, jsonify, render_template, request
 from .alignment import align, sentences, validate_ai_groups
 from .free_providers import CATALOG_PUBLIC, CATALOG_IDS, FreeProtocolError, public_health, routing_snapshot, normalize_lang, translate as translate_free, translate_with_fallback, bilibili_chat
 
+from .official_translation import translate as translate_official, SERVICE_PRESETS
 from .fluently_probe import probe_all
 from .word_dictionary import lookup_word, SOURCES
 from .reading_presets import render_prompt, READING_DEFAULTS, public_presets
@@ -110,6 +111,18 @@ def _destination_safe(base_url):
             raise ValueError("Provider resolves to a disallowed private network address")
 
 
+def normalize_responses_url(base_url):
+    """Switch compatible chat/completions roots to the Responses endpoint."""
+    parsed = urlsplit(base_url)
+    path = parsed.path.rstrip("/")
+    if path.endswith("/chat/completions"):
+        path = path[:-len("/chat/completions")] + "/responses"
+    elif not path.endswith("/responses"):
+        path += ("/responses" if path.endswith("/v1") or path.endswith("/openai/v1")
+                 else "/v1/responses" if not path else "/responses")
+    return urlunsplit((parsed.scheme, parsed.netloc, path, parsed.query, ""))
+
+
 def _call_provider(provider, messages, settings):
     """Dispatch supported AI presets, keeping URLs and keys on the server."""
     protocol = provider.get("protocol", "openai")
@@ -142,6 +155,13 @@ def _call_provider(provider, messages, settings):
             "generationConfig": {"maxOutputTokens": max_tokens,
                                  "temperature": settings["temperature"]},
         }
+    elif protocol == "responses":
+        url = normalize_responses_url(endpoint)
+        if provider.get("api_key"):
+            headers["Authorization"] = "Bearer " + provider["api_key"]
+        body = {"model": model, "instructions": system_text,
+                "input": user_message, "max_output_tokens": max_tokens,
+                "stream": False}
     else:
         url = (endpoint if protocol == "azure-openai"
                else normalize_chat_url(endpoint))
@@ -175,6 +195,16 @@ def _call_provider(provider, messages, settings):
                 raise ValueError("Claude response was incomplete")
             content = "".join(item.get("text", "") for item in data["content"]
                               if item.get("type") == "text")
+        elif protocol == "responses":
+            if data.get("status") not in (None, "completed"):
+                raise ValueError("Responses API returned an incomplete result")
+            content = data.get("output_text")
+            if not isinstance(content, str) or not content.strip():
+                content = "".join(
+                    part.get("text", "")
+                    for item in data.get("output", []) if item.get("type") == "message"
+                    for part in item.get("content", []) if part.get("type") == "output_text"
+                )
         elif protocol == "gemini":
             candidate = data["candidates"][0]
             if candidate.get("finishReason") not in ("STOP", None):
@@ -329,6 +359,38 @@ def ai_api():
         return jsonify({"text": answer, "provider_id": provider_id,
                         "model": model})
     except (FreeProtocolError, ValueError) as error:
+        return jsonify({"error": str(error)}), 502
+
+
+@fluently.post("/fluently/api/cloud/translate")
+def official_translate_api():
+    """Translate one writing version with a configured, dedicated MT endpoint."""
+    _admin_required()
+    data = _json_object()
+    text = data.get("text")
+    provider_id = data.get("provider_id")
+    source = data.get("source", "auto")
+    target = data.get("target", "zh")
+    if not isinstance(text, str) or not text.strip() or len(text) > 10000:
+        return jsonify({"error": "Input text must be 1–10000 characters"}), 400
+    if not isinstance(source, str) or not isinstance(target, str):
+        return jsonify({"error": "Invalid translation language"}), 400
+    settings = read_settings()
+    provider = next(
+        (p for p in settings["cloud"]["providers"]
+         if p["id"] == provider_id and p["enabled"]), None
+    )
+    if not provider:
+        return jsonify({"error": "Official translator is not configured or disabled"}), 404
+    try:
+        translated = translate_official(
+            provider, text, source, target,
+            timeout=settings["ai"]["timeout"],
+            destination_guard=_destination_safe,
+        )
+        return jsonify({"text": translated, "provider_id": provider_id,
+                        "service": provider["service"]})
+    except ValueError as error:
         return jsonify({"error": str(error)}), 502
 
 

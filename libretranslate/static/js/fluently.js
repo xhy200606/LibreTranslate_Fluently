@@ -55,6 +55,8 @@
   const engineId = () => $('#engine').value;
   const providerById = id => (config.ai.providers || []).find(x => x.id === id && x.enabled);
   const freeEnabled = id => (config.free.enabled || []).includes(id);
+  const cloudById = id => (config.cloud?.providers || []).find(
+    p => p.id === id && p.enabled && p.configured);
 
   async function translateText(text, source, target) {
     const id = engineId();
@@ -67,6 +69,13 @@
         provider_id:id, text,source,target,
       });
       return {text:result.text, provider:result.provider_id || id};
+    }
+    const cloud = cloudById(id);
+    if (cloud) {
+      const result = await post('/fluently/api/cloud/translate',{
+        provider_id:id,text,source,target,
+      });
+      return {text:result.text, provider:cloud.name};
     }
     const provider = providerById(id);
     if (!provider) throw new Error('翻译引擎尚未启用，请在设置中心重新选择。');
@@ -85,6 +94,7 @@
       ...config.free.catalog.filter(p => freeEnabled(p.id) && p.id !== 'bilibiliFree'),
       {id:'libretranslate',name:'LibreTranslate · Argos 本地'},
       ...config.ai.providers.filter(p => p.enabled),
+      ...(config.cloud?.providers || []).filter(p => p.enabled && p.configured),
     ];
     const seen = new Set();
     list.forEach(item => {
@@ -541,6 +551,7 @@
       config = await settingsResponse.json();
       config.free = config.free || {catalog:[],enabled:[]};
       config.ai = config.ai || {providers:[]};
+      config.cloud = config.cloud || {providers:[]};
       setAppearance();
       const fallbackLanguages = [
         {code:'en',name:'英语'}, {code:'zh',name:'中文'},

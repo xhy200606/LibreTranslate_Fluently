@@ -59,6 +59,8 @@
     qsa('[data-free]').forEach(input => {input.value = state.free[input.dataset.free];});
     renderProviders();
     renderPresetOptions();
+    renderCloudPresets();
+    renderCloudProviders();
     renderReadingSettings();
     renderFreeProviders();
     document.documentElement.dataset.theme = state.ui.theme || 'system';
@@ -74,6 +76,10 @@
       ...state.free.catalog.filter(p => state.free.enabled.includes(p.id) && p.id !== 'bilibiliFree'),
       {id:'libretranslate',name:'LibreTranslate · Argos'},
       ...state.ai.providers.filter(p=>p.enabled),
+      ...(state.cloud?.providers || []).filter(p=>p.enabled && (
+        p.has_key_id && (!state.cloud_presets.find(x=>x.id===p.service)?.secret_label || p.has_secret)
+        || p.service==="deeplx" && p.endpoint
+      )),
     ];
     const existing = new Set();
     options.forEach(item => {
@@ -160,6 +166,102 @@
   };
 
   const newId = () => 'service_' + Math.random().toString(36).slice(2, 12);
+  const renderCloudPresets = () => {
+    const select=qs('#cloud-preset');
+    select.replaceChildren();
+    (state.cloud_presets || []).forEach(preset => {
+      const option=el('option',{value:preset.id},preset.name);
+      select.append(option);
+    });
+  };
+  const renderCloudProviders = () => {
+    const root=qs('#cloud-providers-list');
+    root.replaceChildren();
+    (state.cloud?.providers || []).forEach((provider,index) => {
+      const preset=(state.cloud_presets||[]).find(x=>x.id===provider.service);
+      if (!preset) return;
+      const card=el('article',{class:'glass card provider'});
+      const head=el('div',{class:'provider-head'});
+      head.append(el('h3',{},provider.name || preset.name));
+      const remove=el('button',{type:'button',class:'danger'},'移除');
+      remove.addEventListener('click',()=>{
+        state.cloud.providers.splice(index,1);
+        renderCloudProviders(); renderDefaultEngineOptions();
+      });
+      head.append(remove);
+      card.append(head);
+      card.append(el('p',{class:'hint'},preset.description));
+      const inputs=el('div',{class:'two-columns cloud-fields'});
+      const inputField=(label,key,type='text')=>{
+        const item=field(label,provider[key] || '',type);
+        item.input.autocomplete='off';
+        item.input.addEventListener('input',()=>{provider[key]=item.input.value;});
+        inputs.append(item.wrapper);
+        return item;
+      };
+      inputField('配置名称','name');
+      if (preset.region_label) {
+        if (provider.service === 'deepl' || provider.service === 'aliyun') {
+          const holder=el('label',{class:'input-stack'},preset.region_label);
+          const select=el('select');
+          const values=provider.service==='deepl' ? ['free','pro'] :
+            ['cn-hangzhou','cn-shanghai','cn-beijing','cn-shenzhen','ap-southeast-1','us-west-1'];
+          values.forEach(v=>select.append(el('option',{value:v},v)));
+          select.value=provider.region||preset.default_region;
+          select.addEventListener('change',()=>provider.region=select.value);
+          holder.append(select);inputs.append(holder);
+        } else inputField(preset.region_label,'region');
+      }
+      if (preset.custom_endpoint) {
+        inputField('可信 DeepLX URL（如 https://host/translate）','endpoint','url');
+      }
+      const secretField=(key,label,already) => {
+        if (!label) return;
+        const item=field(label+'（留空保持原值）','', 'password');
+        item.input.value='';
+        item.input.placeholder=already?'已配置；如需替换请填写新值':'请输入 '+label;
+        item.input.addEventListener('input',()=>{provider[key]=item.input.value;});
+        const clear=el('button',{type:'button',class:'clear-secret'},'清除已保存的'+label);
+        clear.addEventListener('click',()=>{
+          provider['clear_'+key]=true;
+          provider['has_'+key]=false;
+          provider[key]='';
+          item.input.value='';
+          message('已标记清除 '+label+'，点击保存后生效。');
+        });
+        item.wrapper.append(clear);
+        inputs.append(item.wrapper);
+      };
+      secretField('key_id',preset.key_label,provider.has_key_id);
+      secretField('secret',preset.secret_label,provider.has_secret);
+      card.append(inputs);
+      const toolbar=el('div',{class:'provider-toolbar'});
+      const check=el('input',{type:'checkbox'});
+      check.checked=provider.enabled!==false;
+      check.addEventListener('change',()=>{
+        provider.enabled=check.checked; renderDefaultEngineOptions();
+      });
+      const toggle=el('label',{},'启用');
+      toggle.prepend(check);
+      toolbar.append(toggle);
+      if (provider.has_key_id) toolbar.append(el('small',{},'密钥已保存'));
+      const test=el('button',{type:'button'},'测试连接');
+      test.addEventListener('click',async()=>{
+        test.disabled=true;
+        try {
+          const response=await api('/fluently/api/cloud/translate','POST',{
+            provider_id:provider.id,text:'Hello world.',source:'en',target:'zh',
+          });
+          message('连接成功：'+provider.name+' → '+response.text.slice(0,55));
+        } catch(error){message('连接失败：'+error.message,true);}
+        finally{test.disabled=false;}
+      });
+      toolbar.append(test);
+      card.append(toolbar,el('p',{class:'hint'},'先保存后测试；仅发送固定示例句，可能消耗服务配额。'));
+      root.append(card);
+    });
+  };
+
   const renderProviders = () => {
     const root = qs('#providers-list');
     root.replaceChildren();
@@ -192,7 +294,7 @@
       const protocol=el('label',{class:'provider-protocol'},'接口协议');
       const protocolSelect=el('select',{'aria-label':'接口协议'});
       for (const [value,label] of [
-        ['openai','OpenAI Chat Completions'],['anthropic','Anthropic Messages'],
+        ['openai','OpenAI Chat Completions'],['responses','OpenAI Responses API'],['anthropic','Anthropic Messages'],
         ['gemini','Gemini generateContent'],['azure-openai','Azure OpenAI'],
       ]) protocolSelect.append(el('option',{value},label));
       protocolSelect.value=provider.protocol||'openai';
@@ -391,7 +493,20 @@
     qsa('[data-free]').forEach(input => {
       free[input.dataset.free] = input.type === 'number' ? Number(input.value) : input.value;
     });
-    return {ui, ai, server, free};
+    const cloud={
+      providers:(state.cloud?.providers || []).map(p=>{
+        const value={
+          id:p.id, name:p.name, service:p.service, enabled:p.enabled!==false,
+          region:p.region || '', endpoint:p.endpoint || '',
+        };
+        for(const key of ['key_id','secret']){
+          if(p[key]) value[key]=p[key];
+          if(p['clear_'+key]) value['clear_'+key]=true;
+        }
+        return value;
+      }),
+    };
+    return {ui, ai, server, free, cloud};
   };
   const load = async () => {
     try {
@@ -467,6 +582,19 @@
     renderReadingSettings();
     renderDefaultEngineOptions();
     message('已添加服务模板，请检查模型、URL 与 API Key 后保存。');
+  });
+  qs('#add-cloud-provider').addEventListener('click',()=>{
+    if(!state){message('请先加载设置',true);return;}
+    if(state.cloud.providers.length>=24){message('最多配置 24 个机器翻译服务',true);return;}
+    const preset=state.cloud_presets.find(p=>p.id===qs('#cloud-preset').value);
+    if(!preset)return;
+    state.cloud.providers.push({
+      id:'mt_'+newId(),service:preset.id,name:preset.name,
+      enabled:true,region:preset.default_region || '',endpoint:'',
+      has_key_id:false,has_secret:false,
+    });
+    renderCloudProviders();
+    message('已添加 '+preset.name+'，填写密钥并保存后可在首页使用。');
   });
   qs('#reset-reading-prompts').addEventListener('click',()=>{
     if (!state) return;

@@ -113,3 +113,28 @@ B站是翻译专用模型，AI 讲解不一定与通用 LLM 一样充分。可�
 工作台中多个英文表达版本以完整宽度按 **版本 A → 版本 B → 版本 C** 纵向排列。每个版本左侧是可编辑的原文，右侧是该版本的译文；下方保留单独重译、复制译文、逐句对照及移除按钮。
 
 输入框按实际文字高度自动伸缩，不再采用固定高大的编辑卡片。浏览器会在原文编辑、异步译文更新、字体加载及窗口尺寸变化时重新测量原文和译文。桌面端将两栏同步为二者中较高的尺寸，避免长译文被裁切；窄屏（≤ 760px）将同一版本的原文和译文上下排列，各自按内容高度展开。删除内容后高度也会缩小。
+
+
+## 后续移植：FluentRead 官方机器翻译 API 与 Responses
+
+本版本在原有 16 路匿名网页免费协议和 30 个 AI 模板之外，增加**9 类需要独立账户凭据的官方机器翻译接口**，与 FluentRead 同名接口使用相同的请求类型与签名算法：
+
+| 服务 | 认证 | 设置 |
+| --- | --- | --- |
+| DeepL Free / Pro | DeepL-Auth-Key | 在 GUI 中选择套餐，填写 Auth Key |
+| DeepLX 自建 | 可选 Bearer Token | 必须填写可信的 DeepLX /translate URL；不自动连接第三方公共中转站 |
+| 百度翻译开放平台 | APP ID + MD5 密钥签名 | 在 GUI 填写 APP ID、密钥 |
+| 有道智云 | App Key + v3 SHA-256 App Secret | 在 GUI 填写 App Key、App Secret |
+| 腾讯云 TMT | SecretId + SecretKey，TC3-HMAC-SHA256 | 在 GUI 填写两项密钥 |
+| Google Cloud Translation v2 | x-goog-api-key | 在 GUI 填写 Google Cloud API Key |
+| Azure AI Translator v3 | Subscription Key + 可选 Region | 在 GUI 填写订阅密钥与地域 |
+| 阿里云机器翻译 RPC | AccessKey ID + HMAC-SHA1 Secret | 在 GUI 填写密钥和支持的地域 |
+| 小牛翻译 | API Key | 在 GUI 填写 API Key |
+
+打开「设置中心 → 官方机器翻译 API」，选择模板、填写凭据并保存，再进行连接测试。**已保存的密钥与 Secret 只保存在 Docker 数据卷，任何读取 GUI 的接口都只返回是否已配置的标志。** 只有完整配置且已启用的服务才会出现在工作台的单引擎列表中。工作台仍一次仅选一个引擎，多个英文版本逐行对照。
+
+这些**不是匿名免费服务**。供应商可能按实际字符数收费，连接测试本身也可能产生费用。请自行在供应商控制台开通并设置额度，避免内网未授权访问。
+
+AI 模型服务现在额外支持 **OpenAI Responses API**，可在 GUI 中选择 OpenAI Responses API 预设或在兼容服务的协议下拉框选 Responses。它按照 instructions、input、max_output_tokens 发送请求，并读取 output_text 或 output[].content[].output_text。与 Chat Completions API 不同，请确保所用网关支持 Responses 协议。
+
+**移植范围说明：** 本轮补齐以上 9 类官方文本翻译 API，增加 Responses 协议和相应离线测试；还不包括 FluentRead 的浏览器内置 Chrome Translator、ChatGPT 订阅 OAuth、完整桌面扩展体验以及其它尚未单独适配的厂商翻译协议。部署前需要在 Docker 内进行真实 API 连通性验收，静态代码和模拟测试不能替代真实额度、权限与地区验证。

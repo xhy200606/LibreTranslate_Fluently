@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fluently · 设置</title>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static',filename='brand/fluently-logo.svg') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/fluently.css', v='5') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fluently.css', v='6') }}">
 </head>
 <body>
 <div class="shell">
@@ -15,6 +15,7 @@
     <div class="aside-label">偏好设置</div>
     <button class="nav-item active" data-tab="appearance">◐ &nbsp; 界面与阅读</button>
     <button class="nav-item" data-tab="free">◎ &nbsp; 免费翻译协议</button>
+    <button class="nav-item" data-tab="cloud">☁ &nbsp; 官方机器翻译 API</button>
     <button class="nav-item" data-tab="providers">✦ &nbsp; AI 翻译服务</button>
     <button class="nav-item" data-tab="reading">✦ &nbsp; AI 阅读与词典</button>
     <button class="nav-item" data-tab="prompts">⌘ &nbsp; 翻译提示词</button>
@@ -67,6 +68,17 @@
         </div>
       </details>
       <p class="hint">网页匿名接口不是官方承诺的长期公共 API，可能遇到限流、访问验证或协议变更。免费额度与供应商政策各自独立；连接测试只发送固定示例句。</p>
+    </section>
+    <section class="tab-panel hidden" data-panel="cloud">
+      <div class="section-title"><h2>官方机器翻译 API</h2>
+        <p>独立于匿名免费网页协议。DeepL、百度、有道、腾讯云、Google Cloud、Azure、阿里云、小牛及自建 DeepLX；使用你自己的密钥和额度。</p>
+      </div>
+      <div class="glass card preset-picker">
+        <label>机器翻译服务模板 <select id="cloud-preset"></select></label>
+        <button id="add-cloud-provider" type="button" class="primary">＋ 添加机器翻译 API</button>
+      </div>
+      <div id="cloud-providers-list" class="stack" aria-label="机器翻译 API 连接配置"></div>
+      <p class="hint">密钥只写入 Docker 持久卷，页面不显示已保存的原文。测试连接会发送示例文本，可能产生额度费用。未完整配置的服务不会出现在首页引擎列表。DeepLX 只接受可信 HTTPS 或本地服务地址。</p>
     </section>
     <section class="tab-panel hidden" data-panel="providers">
       <div class="section-title"><h2>AI 服务预设</h2><p>常见 OpenAI 兼容服务，以及 Claude Messages、Gemini generateContent、Azure OpenAI。选择模板后填写密钥与有效模型 ID。</p></div>
@@ -123,6 +135,6 @@
     </section>
   </main>
 </div>
-<script src="{{ url_for('static', filename='js/fluently_settings.js', v='5') }}"></script>
+<script src="{{ url_for('static', filename='js/fluently_settings.js', v='6') }}"></script>
 </body>
 </html>

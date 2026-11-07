@@ -407,3 +407,12 @@ html[data-theme=dark] .analysis-detail,html[data-theme=dark] .free-source-card{b
     height:auto;
   }
 }
+
+
+/* Official machine-translation API settings (LAN-first). */
+.cloud-fields{margin-top:15px}
+.cloud-fields .input-stack{min-width:0}
+.cloud-fields input,.cloud-fields select{width:100%}
+.cloud-fields .clear-secret{margin-top:5px;padding:5px 8px;font-size:.72rem;
+  border:1px solid var(--border);background:transparent;color:var(--muted)}
+.cloud-fields .clear-secret:hover{color:#ba4f68;background:rgba(222,87,124,.08)}

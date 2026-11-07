@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from .free_providers import FREE_DEFAULTS, CATALOG_IDS, CATALOG_PUBLIC
 from .reading_presets import READING_DEFAULTS, ALLOWED_PROTOCOLS, public_presets, reading_prompts_copy
 from .word_dictionary import SOURCE_IDS, SOURCES
+from .official_translation import SERVICE_MAP, SERVICE_PRESETS, ALLOWED_ALI_REGIONS
 
 _LOCK = threading.RLock()
 SECRET_OPTIONS = {
@@ -60,6 +61,7 @@ DEFAULT_AI = {
     "temperature": 0.2, "timeout": 60, "max_tokens": 2048,
     "reading": copy.deepcopy(READING_DEFAULTS),
 }
+DEFAULT_CLOUD = {"providers": []}
 PROVIDER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 LANGUAGE_CODE = re.compile(r"^(auto|[a-zA-Z]{2,4}(-[a-zA-Z]{2,4})?)$")
 _URL_SCHEMES = {"http", "https"}
@@ -82,6 +84,7 @@ def _read_unlocked():
         "ui": copy.deepcopy(DEFAULT_UI),
         "ai": copy.deepcopy(DEFAULT_AI),
         "free": copy.deepcopy(FREE_DEFAULTS),
+        "cloud": copy.deepcopy(DEFAULT_CLOUD),
     }
     for group in value:
         incoming = saved.get(group, {})
@@ -367,6 +370,91 @@ def validate_free(value):
     return result
 
 
+def validate_cloud(data, previous=None):
+    """Write-only two-part credentials. GUI may submit blank for unchanged."""
+    if not isinstance(data, dict) or set(data) - {"providers"}:
+        raise ValueError("Unknown official translation configuration")
+    previous = previous or DEFAULT_CLOUD
+    providers = data.get("providers", previous.get("providers", []))
+    if not isinstance(providers, list) or len(providers) > 24:
+        raise ValueError("No more than 24 official translators")
+    old = {p["id"]: p for p in previous.get("providers", [])}
+    output = []
+    seen = set()
+    for item in providers:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid machine translation provider")
+        if set(item) - {"id", "name", "service", "enabled", "key_id",
+                        "secret", "region", "endpoint", "clear_key_id", "clear_secret"}:
+            raise ValueError("Unknown machine translator fields")
+        ident = item.get("id")
+        service = item.get("service")
+        if not isinstance(ident, str) or not PROVIDER_ID.fullmatch(ident) or ident in seen:
+            raise ValueError("Invalid or repeated machine translator ID")
+        if service not in SERVICE_MAP:
+            raise ValueError("Unsupported official translation protocol")
+        seen.add(ident)
+        name = item.get("name")
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+            raise ValueError("Invalid machine translator name")
+        enabled = item.get("enabled", True)
+        if type(enabled) is not bool:
+            raise ValueError("Invalid machine translator enabled flag")
+        region = item.get("region", SERVICE_MAP[service]["default_region"])
+        if not isinstance(region, str) or len(region) > 50:
+            raise ValueError("Invalid machine translator region")
+        if service == "deepl" and region not in {"free", "pro"}:
+            raise ValueError("DeepL region must be free or pro")
+        if service == "aliyun" and region not in ALLOWED_ALI_REGIONS:
+            raise ValueError("Unsupported Aliyun region")
+        if service == "azure-translator" and not re.fullmatch(r"[a-z0-9-]{1,50}", region):
+            raise ValueError("Invalid Azure region")
+        endpoint = item.get("endpoint", "")
+        if service != "deeplx" and endpoint:
+            raise ValueError("Only self-hosted DeepLX may use a custom endpoint")
+        if endpoint:
+            endpoint = validate_base_url(endpoint)
+        prior = old.get(ident, {})
+        if prior and prior.get("service") != service:
+            raise ValueError("Existing provider protocol may not be changed")
+        value = {"id":ident, "name":name.strip(), "service":service,
+                 "enabled":enabled, "region":region, "endpoint":endpoint}
+        for key in ("key_id", "secret"):
+            raw = item.get(key)
+            if item.get("clear_" + key) is True:
+                raw = ""
+            elif raw is None or raw == "":
+                raw = prior.get(key, "")
+            if not isinstance(raw, str) or len(raw) > 4096:
+                raise ValueError("Invalid machine translator credential")
+            value[key] = raw
+        output.append(value)
+    return {"providers": output}
+
+
+def cloud_public(data):
+    entries = []
+    for item in data["providers"]:
+        preset = SERVICE_MAP[item["service"]]
+        configured = bool(item["key_id"]) and (not preset["secret_label"] or bool(item["secret"]))
+        if item["service"] == "deeplx":
+            configured = bool(item.get("endpoint"))
+        entries.append({"id":item["id"],"name":item["name"],
+                        "service":item["service"],"enabled":item["enabled"],
+                        "configured":configured})
+    return {"providers": entries}
+
+
+def cloud_admin(data):
+    entries = []
+    for item in data["providers"]:
+        entry = {k: v for k,v in item.items() if k not in {"key_id", "secret"}}
+        entry.update({"has_key_id":bool(item.get("key_id")),
+                      "has_secret":bool(item.get("secret"))})
+        entries.append(entry)
+    return {"providers": entries}
+
+
 def public_settings():
     data = read_settings()
     return {
@@ -379,6 +467,7 @@ def public_settings():
                 for p in data["ai"]["providers"]
             ],
         },
+        "cloud": cloud_public(data["cloud"]),
         "free": {"catalog": CATALOG_PUBLIC, "enabled": data["free"]["enabled"],
                  "mode": data["free"]["mode"]},
         "reading": {"dictionary_source": data["ai"]["reading"]["dictionary_source"],
@@ -397,13 +486,15 @@ def admin_settings(option_definitions):
         "server": server_schema(option_definitions),
         "free": dict(data["free"], catalog=CATALOG_PUBLIC),
         "ai_presets": public_presets(),
+        "cloud": cloud_admin(data["cloud"]),
+        "cloud_presets": SERVICE_PRESETS,
         "reading_defaults": reading_prompts_copy(),
         "dictionary_sources": SOURCES,
     }
 
 
 def save_settings(data, option_definitions):
-    if not isinstance(data, dict) or set(data) - {"ui", "ai", "server", "free"}:
+    if not isinstance(data, dict) or set(data) - {"ui", "ai", "server", "free", "cloud"}:
         raise ValueError("Unknown settings sections")
     definitions = {item["name"]: item for item in option_definitions}
     with _LOCK, _file_lock():
@@ -414,6 +505,8 @@ def save_settings(data, option_definitions):
             current["ai"] = validate_ai(data["ai"], current["ai"])
         if "free" in data:
             current["free"] = validate_free(data["free"])
+        if "cloud" in data:
+            current["cloud"] = validate_cloud(data["cloud"], current["cloud"])
         if "server" in data:
             overrides = data["server"]
             if not isinstance(overrides, dict):

@@ -14,6 +14,9 @@ AI_PRESETS = [
      "notes":"翻译模型；可尝试用于阅读分析，但复杂句法建议通用大模型"},
     {"id":"openai","name":"OpenAI","protocol":"openai",
      "base_url":"https://api.openai.com/v1","model":"gpt-4o-mini"},
+    {"id":"openai-responses","name":"OpenAI Responses API","protocol":"responses",
+     "base_url":"https://api.openai.com/v1","model":"gpt-4.1-mini",
+     "notes":"支持 /v1/responses 与兼容网关的 output_text 返回"},
     {"id":"deepseek","name":"DeepSeek","protocol":"openai",
      "base_url":"https://api.deepseek.com/v1","model":"deepseek-chat"},
     {"id":"tongyi","name":"通义千问 · DashScope","protocol":"openai",
@@ -75,7 +78,7 @@ AI_PRESETS = [
 ]
 
 PRESET_MAP = {item["id"]: item for item in AI_PRESETS}
-ALLOWED_PROTOCOLS = {"openai", "anthropic", "gemini", "azure-openai"}
+ALLOWED_PROTOCOLS = {"openai", "responses", "anthropic", "gemini", "azure-openai"}
 
 # FluentRead study-card structure (system, meaning, grammar, usage, practice).
 # Reworded templates keep its section headers and grammar-table contract while
