@@ -63,7 +63,7 @@ def test_theme_is_rendered_before_async_js(monkeypatch, tmp_path, page, theme):
     assert result.status_code == 200
     text = result.get_data(as_text=True)
     assert '<html lang="zh-CN" data-theme="' + theme + '">' in text
-    assert "fluently.css?v=8" in text
+    assert "fluently.css?v=9" in text
     assert "fluently" in text
 
 
@@ -75,4 +75,4 @@ def test_light_dark_system_css_do_not_break_layout():
         encoding="utf-8")
     for html in (HOME, SETTINGS):
         assert "data-theme=" in html
-        assert "v='8'" in html
+        assert "v='9'" in html

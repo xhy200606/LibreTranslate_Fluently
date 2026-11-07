@@ -805,3 +805,94 @@ html[data-theme="dark"]{
 @media(prefers-reduced-motion:reduce){
   .compare-workspace .hover-translation-sentence{transition:none}
 }
+
+
+/* v9 — Keep settings sidebar buttons separated and prevent the global dark
+   button surface from turning every nav row into a touching solid card. */
+.sidebar{
+  min-width:0;
+}
+.sidebar .brand{
+  flex-shrink:0;
+  padding:3px 12px 22px;
+}
+.sidebar-navigation{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:24px;
+  min-width:0;
+}
+.sidebar-group{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:7px;
+  min-width:0;
+}
+.sidebar .aside-label{
+  margin:0 0 3px;
+  padding:0 14px;
+  line-height:1.5;
+  flex-shrink:0;
+}
+html[data-theme] .sidebar .nav-item,
+html[data-theme] .sidebar button.nav-item:not(.primary){
+  display:flex;
+  align-items:center;
+  flex:0 0 auto;
+  width:100%;
+  min-height:45px;
+  margin:0;
+  padding:10px 14px;
+  line-height:1.45;
+  text-align:left;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  border:1px solid transparent;
+  border-radius:13px;
+  background:transparent;
+  color:var(--ink);
+  box-shadow:none;
+  transform:none;
+  transition:background-color .18s ease,color .18s ease;
+}
+html[data-theme] .sidebar .nav-item:hover,
+html[data-theme] .sidebar button.nav-item:not(.primary):hover{
+  background:var(--ui-soft);
+  color:var(--ui-link);
+  transform:none;
+}
+html[data-theme] .sidebar .nav-item.active,
+html[data-theme] .sidebar button.nav-item.active:not(.primary){
+  background:var(--ui-badge-bg);
+  color:var(--ui-link);
+  font-weight:650;
+  box-shadow:inset 3px 0 0 var(--ui-focus);
+}
+html[data-theme] .sidebar .nav-item.active:hover,
+html[data-theme] .sidebar button.nav-item.active:not(.primary):hover{
+  background:var(--ui-badge-bg);
+  color:var(--ui-link);
+}
+html[data-theme] .sidebar .nav-item:focus-visible{
+  outline:2px solid var(--ui-focus);
+  outline-offset:2px;
+}
+@media(max-width:650px){
+  .sidebar-navigation{gap:16px}
+  .sidebar-group{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));
+    gap:8px;
+  }
+  .sidebar .aside-label{grid-column:1/-1;padding:0 6px}
+  html[data-theme] .sidebar .nav-item,
+  html[data-theme] .sidebar button.nav-item:not(.primary){
+    min-height:44px;
+    padding:10px 12px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  html[data-theme] .sidebar .nav-item{transition:none}
+}

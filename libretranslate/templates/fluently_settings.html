@@ -4,22 +4,28 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fluently · 设置</title>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static',filename='brand/fluently-logo.svg') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/fluently.css', v='8') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fluently.css', v='9') }}">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar glass">
     <a class="brand" href="{{ url_for('fluently.workspace') }}"><img class="brand-logo" src="{{ url_for('static',filename='brand/fluently-logo.svg') }}" width="36" height="36" alt=""> Fluently</a>
-    <div class="aside-label">工作空间</div>
-    <a href="{{ url_for('fluently.workspace') }}" class="nav-item">⇄ &nbsp; 翻译工作台</a>
-    <div class="aside-label">偏好设置</div>
-    <button class="nav-item active" data-tab="appearance">◐ &nbsp; 界面与阅读</button>
-    <button class="nav-item" data-tab="free">◎ &nbsp; 免费翻译协议</button>
-    <button class="nav-item" data-tab="cloud">☁ &nbsp; 官方机器翻译 API</button>
-    <button class="nav-item" data-tab="providers">✦ &nbsp; AI 翻译服务</button>
-    <button class="nav-item" data-tab="reading">✦ &nbsp; AI 阅读与词典</button>
-    <button class="nav-item" data-tab="prompts">⌘ &nbsp; 翻译提示词</button>
-    <button class="nav-item" data-tab="server">⚙ &nbsp; 服务器参数</button>
+    <nav class="sidebar-navigation" aria-label="设置导航">
+      <div class="sidebar-group">
+        <div class="aside-label">工作空间</div>
+        <a href="{{ url_for('fluently.workspace') }}" class="nav-item">⇄ &nbsp; 翻译工作台</a>
+      </div>
+      <div class="sidebar-group">
+        <div class="aside-label">偏好设置</div>
+        <button class="nav-item active" data-tab="appearance">◐ &nbsp; 界面与阅读</button>
+        <button class="nav-item" data-tab="free">◎ &nbsp; 免费翻译协议</button>
+        <button class="nav-item" data-tab="cloud">☁ &nbsp; 官方机器翻译 API</button>
+        <button class="nav-item" data-tab="providers">✦ &nbsp; AI 翻译服务</button>
+        <button class="nav-item" data-tab="reading">✦ &nbsp; AI 阅读与词典</button>
+        <button class="nav-item" data-tab="prompts">⌘ &nbsp; 翻译提示词</button>
+        <button class="nav-item" data-tab="server">⚙ &nbsp; 服务器参数</button>
+      </div>
+    </nav>
     <div class="sidebar-footer">LibreTranslate · Fluently<br>灵感参考 FluentRead</div>
   </aside>
   <main class="content">
