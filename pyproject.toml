@@ -52,6 +52,7 @@ dependencies = [
     "itsdangerous ==2.1.2",
     "Werkzeug ==2.3.8",
     "requests ==2.31.0",
+    "pycryptodome >=3.20,<4",
     "redis ==4.4.4",
     "numpy <2;python_version<='3.12'",
     "numpy ==2.3.5;python_version>='3.13'",

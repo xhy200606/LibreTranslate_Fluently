@@ -49,7 +49,9 @@
     qs('#temperature').value = state.ai.temperature;
     qs('#ai-timeout').value = state.ai.timeout;
     qs('#max-tokens').value = state.ai.max_tokens;
+    qsa('[data-free]').forEach(input => {input.value = state.free[input.dataset.free];});
     renderProviders();
+    renderFreeProviders();
     renderServer();
   };
   const newId = () => 'service_' + Math.random().toString(36).slice(2, 12);
@@ -103,6 +105,71 @@
       });
       toolbar.append(test);
       card.append(toolbar, el('p', {class: 'hint'}, '修改服务参数后先保存，再运行连接测试。'));
+      root.append(card);
+    });
+  };
+
+  const renderFreeProviders = () => {
+    const root = qs('#free-providers-list');
+    root.replaceChildren();
+    if (!state.free || !state.free.catalog) return;
+    state.free.order.forEach((ident, index) => {
+      const provider = state.free.catalog.find(p => p.id === ident);
+      if (!provider) return;
+      const card = el('div', {class:'glass card free-provider'});
+      const line = el('div', {class:'free-provider-line'});
+      const title = el('div');
+      title.append(el('h3', {}, provider.name));
+      title.append(el('p', {}, provider.description));
+      const toggle = el('label', {class:'free-toggle'});
+      const checkbox = el('input', {type:'checkbox'});
+      checkbox.checked = state.free.enabled.includes(ident);
+      checkbox.addEventListener('change', () => {
+        if (!checkbox.checked && state.free.enabled.length === 1 && state.free.enabled.includes(ident)) {
+          checkbox.checked = true;
+          message('至少保留一个免费翻译服务。', true);
+          return;
+        }
+        state.free.enabled = checkbox.checked ?
+          [...new Set([...state.free.enabled, ident])] :
+          state.free.enabled.filter(x => x !== ident);
+      });
+      toggle.append(checkbox, el('span', {}, '启用'));
+      const buttons = el('div', {class:'free-actions'});
+      const up = el('button', {type:'button'}, '↑');
+      const down = el('button', {type:'button'}, '↓');
+      up.disabled = index === 0;
+      down.disabled = index === state.free.order.length - 1;
+      const move = offset => {
+        const items = state.free.order;
+        [items[index], items[index + offset]] = [items[index + offset], items[index]];
+        renderFreeProviders();
+      };
+      up.addEventListener('click', () => move(-1));
+      down.addEventListener('click', () => move(1));
+      const test = el('button', {type:'button'}, '测试连接');
+      const feedback = el('small', {class:'free-status'}, '尚未检测');
+      test.addEventListener('click', async () => {
+        if (!token) { message('请先解锁设置。', true); return; }
+        // A disabled service can be tested without modifying saved preferences
+        if (!state.free.enabled.includes(ident)) {
+          feedback.textContent = '请先启用并保存该服务。';
+          return;
+        }
+        test.disabled = true;
+        feedback.textContent = '检测中…';
+        const start = Date.now();
+        try {
+          const target = ident === 'apertiumFree' ? 'es' : 'zh';
+          const data = await api('/fluently/api/free/translate', 'POST',
+            {provider_id:ident, text:'Hello world.', source:'en', target});
+          feedback.textContent = '连接正常 · ' + (Date.now() - start) + 'ms · ' + data.text.slice(0,45);
+        } catch (error) { feedback.textContent = '失败：' + error.message; }
+        finally { test.disabled = false; }
+      });
+      buttons.append(up, down, test);
+      line.append(title, toggle, buttons);
+      card.append(line, feedback);
       root.append(card);
     });
   };
@@ -169,7 +236,12 @@
       server[field.name] = !input.value ? null : field.type === 'bool' ?
         input.value === 'true' : field.type === 'int' ? Number(input.value) : input.value;
     });
-    return {ui, ai, server};
+    const free = {...state.free};
+    delete free.catalog;
+    qsa('[data-free]').forEach(input => {
+      free[input.dataset.free] = input.type === 'number' ? Number(input.value) : input.value;
+    });
+    return {ui, ai, server, free};
   };
   const connect = async () => {
     token = qs('#admin-token').value.trim();

@@ -16,6 +16,7 @@
     <div class="language-picker"><label>原文语言 <select id="source"><option value="auto">自动检测</option></select></label><span class="switch-symbol">⇄</span><label>目标语言 <select id="target"></select></label></div>
     <div class="controls-right"><label>管理员令牌（调用 AI）<input type="password" autocomplete="off" id="token" placeholder="会话内有效"></label><button id="translate" class="primary">翻译并对比</button></div>
   </section>
+  <section class="glass engine-choices"><div class="card-heading"><h2>对照引擎</h2><span class="card-info">选择独立免费协议、智能免费池或 AI 模型</span></div><div class="engine-select-grid" id="engine-choices"></div></section>
   <div class="grid-compare">
     <section class="glass translation-card original-card">
       <div class="card-heading"><span class="label-dot"></span><h2>原文</h2><span class="card-info" id="count">0 字符</span></div>
@@ -25,7 +26,7 @@
     <section class="results-panel" id="results" aria-label="翻译对比结果"></section>
   </div>
   <section id="alignment" class="glass alignment-card hidden">
-    <div class="card-heading"><h2>逐句对照</h2><span class="card-info">悬停任意句子，突出显示对应原文与译文（按句序近似匹配）</span></div>
+    <div class="card-heading"><h2>逐句对照</h2><span class="card-info">原文与译文按动态规划匹配；AI 语义对齐为可选模式，低置信度需要人工核对</span></div>
     <div class="alignment-grid" id="alignment-grid"></div>
   </section>
   <section id="explanation" class="glass explanation-card hidden">

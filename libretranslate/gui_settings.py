@@ -13,6 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .free_providers import FREE_DEFAULTS, CATALOG_IDS, CATALOG_PUBLIC
+
 _LOCK = threading.RLock()
 SECRET_OPTIONS = {
     "API_KEYS_REMOTE", "REQ_LIMIT_STORAGE", "SHARED_STORAGE",
@@ -39,6 +41,7 @@ DEFAULT_UI = {
     "compare_count": 3, "highlight": True, "deep_explain": True,
     "auto_translate": False, "source_language": "auto",
     "target_language": "en", "debounce_ms": 650,
+    "alignment_mode": "heuristic",
 }
 DEFAULT_AI = {
     "providers": [],
@@ -74,6 +77,7 @@ def _read_unlocked():
         "server": {},
         "ui": copy.deepcopy(DEFAULT_UI),
         "ai": copy.deepcopy(DEFAULT_AI),
+        "free": copy.deepcopy(FREE_DEFAULTS),
     }
     for group in value:
         incoming = saved.get(group, {})
@@ -185,6 +189,8 @@ def validate_ui(value):
     result.update(value)
     if result["theme"] not in ("light", "dark", "system"):
         raise ValueError("Invalid theme")
+    if result["alignment_mode"] not in ("heuristic", "ai"):
+        raise ValueError("alignment_mode must be heuristic or ai")
     for name in ("glass", "highlight", "deep_explain", "auto_translate"):
         if type(result[name]) is not bool:
             raise ValueError(name + " must be a boolean")
@@ -286,6 +292,30 @@ def validate_ai(value, previous=None):
     return result
 
 
+def validate_free(value):
+    if not isinstance(value, dict) or set(value) - set(FREE_DEFAULTS):
+        raise ValueError("Unknown free translation settings")
+    result = copy.deepcopy(FREE_DEFAULTS)
+    result.update(value)
+    enabled, order = result["enabled"], result["order"]
+    if not isinstance(enabled, list) or not enabled or len(set(map(str, enabled))) != len(enabled):
+        raise ValueError("At least one distinct free provider is required")
+    if any(not isinstance(x, str) or x not in CATALOG_IDS for x in enabled):
+        raise ValueError("Unknown free provider in enabled list")
+    if not isinstance(order, list) or len(order) != len(CATALOG_IDS) or set(order) != CATALOG_IDS:
+        raise ValueError("Provider order must include every free provider once")
+    if result["mode"] not in ("sequential", "balanced"):
+        raise ValueError("Unknown free routing mode")
+    for name, low, high in (("timeout", 1, 15), ("total_timeout", 5, 30),
+                            ("cooldown_seconds", 30, 86400), ("max_characters", 500, 30000)):
+        _bounded(result[name], name, low, high)
+    email = result["my_memory_email"]
+    if not isinstance(email, str) or len(email) > 254 or (
+            email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email)):
+        raise ValueError("Invalid MyMemory email")
+    return result
+
+
 def public_settings():
     data = read_settings()
     return {
@@ -297,6 +327,7 @@ def public_settings():
                 for p in data["ai"]["providers"]
             ],
         },
+        "free": {"catalog": CATALOG_PUBLIC, "enabled": data["free"]["enabled"]},
         "admin_enabled": bool(os.environ.get("LT_SETTINGS_ADMIN_TOKEN")),
     }
 
@@ -308,11 +339,12 @@ def admin_settings(option_definitions):
     return {
         "ui": data["ui"], "ai": data["ai"],
         "server": server_schema(option_definitions),
+        "free": dict(data["free"], catalog=CATALOG_PUBLIC),
     }
 
 
 def save_settings(data, option_definitions):
-    if not isinstance(data, dict) or set(data) - {"ui", "ai", "server"}:
+    if not isinstance(data, dict) or set(data) - {"ui", "ai", "server", "free"}:
         raise ValueError("Unknown settings sections")
     definitions = {item["name"]: item for item in option_definitions}
     with _LOCK, _file_lock():
@@ -321,6 +353,8 @@ def save_settings(data, option_definitions):
             current["ui"] = validate_ui(data["ui"])
         if "ai" in data:
             current["ai"] = validate_ai(data["ai"], current["ai"])
+        if "free" in data:
+            current["free"] = validate_free(data["free"])
         if "server" in data:
             overrides = data["server"]
             if not isinstance(overrides, dict):

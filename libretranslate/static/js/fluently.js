@@ -24,34 +24,56 @@
     if (!result.ok) throw Error(payload.error || 'HTTP ' + result.status);
     return payload;
   };
-  const split = text => (text.match(/[^。！？.!?\n]+[。！？.!?]?|\n+/g) || [])
-    .map(s => s.trim()).filter(Boolean);
-  const align = () => {
+  let translationVersion = 0;
+  const alignmentRows = new Map();
+  const escapeCss = value => String(value).replace(/[^A-Za-z0-9_-]/g, '');
+  const align = async () => {
     const root = $('#alignment-grid');
     root.replaceChildren();
-    if (!config.ui.highlight || !responses.length) {
-      $('#alignment').classList.add('hidden');
-      return;
+    if (!config.ui.highlight || !responses.some(r => r.text)) {
+      $('#alignment').classList.add('hidden'); return;
     }
-    const input = split($('#original').value);
-    const translated = responses.filter(r => r.text).map(r => ({
-      name:r.name, sentences:split(r.text),
+    const version = translationVersion;
+    const results = responses.filter(r => r.text);
+    const source = $('#original').value;
+    const panels = await Promise.all(results.map(async r => {
+      try {
+        return {name:r.name, data:await post('/fluently/api/align', {
+          source, target:r.text, mode:config.ui.alignment_mode || 'heuristic',
+        }, true)};
+      } catch (error) { return {name:r.name, error:error.message}; }
     }));
-    if (!input.length || !translated.length) return;
-    const head = el('div', 'alignment-row');
-    head.append(el('strong', '', '原文'));
-    translated.forEach(r => head.append(el('strong', '', r.name)));
-    root.append(head);
-    input.forEach((source, index) => {
+    if (version !== translationVersion) return;
+    const valid = panels.filter(x => x.data && x.data.source && x.data.groups);
+    if (!valid.length) { $('#alignment').classList.add('hidden'); return; }
+    const sourceSentences = valid[0].data.source;
+    const header = el('div', 'alignment-row');
+    header.append(el('strong', '', '原文'));
+    valid.forEach(p => header.append(el('strong', '', p.name + ' · ' + (p.data.method === 'ai' ? '语义对齐' : '结构对齐'))));
+    root.append(header);
+    sourceSentences.forEach((sentence, index) => {
       const row = el('div', 'alignment-row');
-      row.append(el('span', 'sentence', source));
-      translated.forEach(r => row.append(el('span', 'sentence', r.sentences[index] || '—')));
+      row.dataset.source = String(index);
+      row.append(el('span', 'sentence', sentence.text));
+      valid.forEach(panel => {
+        const groups = panel.data.groups.filter(g => g.source_ids.includes(index));
+        const targetIds = [...new Set(groups.flatMap(g => g.target_ids))];
+        const text = targetIds.map(i => panel.data.target[i]?.text || '').filter(Boolean).join(' ');
+        const cell = el('span', 'sentence', text || '—');
+        cell.title = '匹配置信度（结构证据）：' + (groups[0]?.confidence ?? 0);
+        row.append(cell);
+      });
       row.addEventListener('mouseenter', () => row.classList.add('highlighted'));
       row.addEventListener('mouseleave', () => row.classList.remove('highlighted'));
       root.append(row);
     });
-    root.style.setProperty('--col-count', translated.length + 1);
+    root.style.setProperty('--col-count', valid.length + 1);
     $('#alignment').classList.remove('hidden');
+  };
+  let alignDelay;
+  const scheduleAlign = () => {
+    clearTimeout(alignDelay);
+    if (responses.some(r => r.text) && config.ui.highlight) alignDelay = setTimeout(align, 350);
   };
   const renderResults = () => {
     const root = $('#results');
@@ -73,14 +95,25 @@
       card.append(top,value,bottom);
       root.append(card);
     });
-    align();
+    scheduleAlign();
   };
   const translate = async () => {
     const text = $('#original').value.trim();
     if (!text) return msg('请输入需要翻译的文字。', true);
+    translationVersion++;
     const limit = config.ui.compare_count;
     const enabled = config.ai.providers.filter(p => p.enabled).slice(0,limit);
-    const jobs = enabled.map(p => ({id:p.id, name:p.name, model:p.model, text:''}));
+    const freeEnabled = (config.free?.enabled || []).filter(id => (config.free?.catalog || []).some(p => p.id === id));
+    const configuredFree = (config.free?.catalog || []).filter(p => freeEnabled.includes(p.id));
+    const candidates = [
+      {id:'libretranslate', name:'LibreTranslate', model:'Argos', kind:'local'},
+      {id:'freeAuto', name:'智能免费翻译', model:'自动换线', kind:'free'},
+      ...configuredFree.map(p => ({id:p.id, name:p.name, model:'匿名网页服务', kind:'free'})),
+      ...enabled.map(p => ({id:p.id, name:p.name, model:p.model, kind:'ai'})),
+    ];
+    const selection = Array.from(document.querySelectorAll('.engine-selector')).map(s => s.value);
+    const jobs = selection.length ? selection.map(id => candidates.find(c => c.id === id)).filter(Boolean).slice(0,limit).map(p => ({...p,text:''}))
+      : candidates.slice(0,limit).map(p => ({...p,text:''}));
     if (!jobs.length) jobs.push({id:'libretranslate',name:'LibreTranslate',model:'Argos',text:''});
     else if (jobs.length < limit) jobs.unshift({id:'libretranslate',name:'LibreTranslate',model:'Argos',text:''});
     responses = jobs;
@@ -95,6 +128,12 @@
             q:text, source, target, format:'text', api_key:localStorage.getItem('api_key') || '',
           });
           r.text = result.translatedText;
+        } else if (r.kind === 'free') {
+          const result = await post('/fluently/api/free/translate', {
+            provider_id:r.id, text, source, target,
+          }, true);
+          r.text = result.text;
+          if (result.provider_id && r.id === 'freeAuto') r.model = result.provider_id;
         } else {
           const result = await post('/fluently/api/ai', {
             action:'translate', provider_id:r.id, text, source, target,
@@ -127,6 +166,29 @@
       $('#explanation-output').textContent = response.text;
     } catch (error) { $('#explanation-output').textContent = error.message; }
   };
+  const renderEngineChoices = () => {
+    const root = $('#engine-choices');
+    if (!root) return;
+    root.replaceChildren();
+    const all = [
+      {id:'libretranslate',name:'LibreTranslate（Argos）'},
+      {id:'freeAuto',name:'智能免费翻译池'},
+      ...(config.free?.catalog || []).filter(p => (config.free?.enabled || []).includes(p.id)),
+      ...(config.ai?.providers || []).filter(p => p.enabled),
+    ];
+    const count = Math.min(config.ui.compare_count || 3, 6);
+    for (let index = 0; index < count; index++) {
+      const select = el('select','engine-selector');
+      select.setAttribute('aria-label','对比引擎 ' + (index + 1));
+      all.forEach((service, idx) => {
+        const opt = el('option','',service.name);
+        opt.value = service.id;
+        select.append(opt);
+      });
+      select.value = all[index % all.length]?.id || '';
+      root.append(select);
+    }
+  };
   const boot = async () => {
     try {
       const [uiRes, langRes] = await Promise.all([
@@ -135,6 +197,7 @@
       if (!uiRes.ok || !langRes.ok) throw Error('无法加载服务设置或语言列表。');
       config = await uiRes.json();
       languages = await langRes.json();
+      renderEngineChoices();
       for (const item of languages) {
         const optionSource = el('option','',item.name);
         optionSource.value = item.code;
@@ -165,6 +228,7 @@
   $('#clear').addEventListener('click', () => {
     $('#original').value = '';
     $('#count').textContent = '0 字符';
+    translationVersion++;
     responses = [];
     renderResults();
     $('#explanation').classList.add('hidden');

@@ -30,6 +30,12 @@ RUN addgroup --system --gid 1032 libretranslate && adduser --system --uid 1032 l
 USER libretranslate
 
 COPY --from=builder --chown=1032:1032 /app /app
+
+# Rootless container must be able to write its persistent GUI settings volume.
+# Named Docker volumes inherit this path's ownership on first mount.
+USER root
+RUN mkdir -p /app/db && chown -R 1032:1032 /app/db
+USER libretranslate
 WORKDIR /app
 
 COPY --from=builder --chown=1032:1032 /app/venv/bin/ltmanage /usr/bin/

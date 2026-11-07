@@ -7,7 +7,12 @@ import socket
 from urllib.parse import urlsplit
 
 import requests
+import json
+import re
 from flask import Blueprint, abort, jsonify, render_template, request
+
+from .alignment import align, sentences, validate_ai_groups
+from .free_providers import CATALOG_PUBLIC, CATALOG_IDS, FreeProtocolError, public_health, translate as translate_free, translate_with_fallback
 
 from .default_values import _default_options_objects
 from .gui_settings import (
@@ -166,3 +171,84 @@ def ai_api():
                         "model": provider["model"]})
     except ValueError as error:
         return jsonify({"error": str(error)}), 502
+
+
+@fluently.get("/fluently/api/free/providers")
+def free_catalog():
+    return jsonify({"providers": CATALOG_PUBLIC, "health": public_health()})
+
+
+@fluently.post("/fluently/api/free/translate")
+def free_translate_api():
+    _admin_required()
+    data = _json_object()
+    ident = data.get("provider_id")
+    text = data.get("text")
+    source, target = data.get("source", "auto"), data.get("target", "en")
+    settings = read_settings()["free"]
+    if not isinstance(text, str) or not text.strip() or len(text) > settings["max_characters"]:
+        return jsonify({"error": "Invalid translation length"}), 400
+    if not isinstance(source, str) or not isinstance(target, str):
+        return jsonify({"error": "Invalid translation language"}), 400
+    if ident != "freeAuto" and (ident not in CATALOG_IDS or ident not in settings["enabled"]):
+        return jsonify({"error": "Free provider is not enabled"}), 400
+    try:
+        if ident == "freeAuto":
+            result = translate_with_fallback(text, source, target, settings)
+            if not result["provider_id"]:
+                return jsonify({"error": "All free translation providers failed",
+                                "attempts": result["attempts"]}), 502
+            return jsonify(result)
+        return jsonify({"text": translate_free(ident, text, source, target, settings),
+                        "provider_id": ident})
+    except FreeProtocolError as error:
+        return jsonify({"error": str(error), "category": error.category}), (
+            400 if error.category == "request" else 502
+        )
+
+
+@fluently.post("/fluently/api/align")
+def alignment_api():
+    _admin_required()
+    data = _json_object()
+    source = data.get("source")
+    target = data.get("target")
+    if not isinstance(source, str) or not isinstance(target, str):
+        return jsonify({"error": "Source and target must be strings"}), 400
+    if len(source) > 30000 or len(target) > 30000:
+        return jsonify({"error": "Alignment input exceeds limit"}), 400
+    try:
+        result = align(source, target)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    # Opt-in semantic alignment: validate IDs and ensure complete coverage.
+    if data.get("mode") == "ai":
+        ai = read_settings()["ai"]
+        provider = next((p for p in ai["providers"] if p.get("enabled")), None)
+        if provider and result["source"] and result["target"]:
+            system = (
+                "You are a bilingual sentence aligner. Match source and translated "
+                "sentence indices by meaning, including reordered and merged sentences. "
+                "Return JSON only: {\"groups\":[{\"source_ids\":[0],\"target_ids\":[0]}]}. "
+                "Every sentence index must appear exactly once in the groups."
+            )
+            payload = json.dumps({
+                "source": [s["text"] for s in result["source"]],
+                "target": [s["text"] for s in result["target"]],
+            }, ensure_ascii=False)
+            try:
+                content = _call_provider(provider, [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": payload},
+                ], dict(ai, temperature=0, max_tokens=min(4096, ai["max_tokens"])))
+                match = re.search(r"\{[\s\S]*\}", content)
+                parsed = json.loads(match.group(0) if match else content)
+                result["groups"] = validate_ai_groups(
+                    parsed["groups"], len(result["source"]), len(result["target"])
+                )
+                result["method"] = "ai"
+                result["confidence"] = "medium"
+            except (ValueError, KeyError, TypeError):
+                # Correctness is preferable to claiming AI validation.
+                result["method"] = "heuristic-fallback"
+    return jsonify(result)

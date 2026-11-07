@@ -13,6 +13,7 @@
     <a href="{{ url_for('fluently.workspace') }}" class="nav-item">⇄ &nbsp; 翻译工作台</a>
     <div class="aside-label">偏好设置</div>
     <button class="nav-item active" data-tab="appearance">◐ &nbsp; 界面与阅读</button>
+    <button class="nav-item" data-tab="free">◎ &nbsp; 免费翻译协议</button>
     <button class="nav-item" data-tab="providers">✦ &nbsp; AI 翻译服务</button>
     <button class="nav-item" data-tab="prompts">⌘ &nbsp; 提示词与推理</button>
     <button class="nav-item" data-tab="server">⚙ &nbsp; 服务器参数</button>
@@ -34,6 +35,7 @@
         <div class="field-row"><div><h3>液态玻璃</h3><p>半透明背景与柔和模糊</p></div><input type="checkbox" data-ui="glass"></div>
         <div class="field-row"><div><h3>字号</h3><p>工作台正文大小（12–24 px）</p></div><input type="number" min="12" max="24" data-ui="font_size"></div>
         <div class="field-row"><div><h3>对照翻译框数量</h3><p>最多同时对比 6 个引擎</p></div><input type="number" min="1" max="6" data-ui="compare_count"></div>
+        <div class="field-row"><div><h3>句子对齐方式</h3><p>结构对齐无需 AI 额度；语义对齐使用第一个已启用的 AI 服务</p></div><select data-ui="alignment_mode"><option value="heuristic">本地结构对齐</option><option value="ai">AI 语义对齐（失败自动降级）</option></select></div>
         <div class="field-row"><div><h3>双语对应高亮</h3><p>悬停句子时同步突出原文与译文</p></div><input type="checkbox" data-ui="highlight"></div>
         <div class="field-row"><div><h3>划词深度讲解</h3><p>选中原文后调用指定 AI</p></div><input type="checkbox" data-ui="deep_explain"></div>
         <div class="field-row"><div><h3>输入后自动翻译</h3><p>也可选择手动点击翻译</p></div><input type="checkbox" data-ui="auto_translate"></div>
@@ -41,6 +43,25 @@
         <div class="field-row"><div><h3>默认源语言</h3><p>语言代码，或 auto</p></div><input data-ui="source_language" placeholder="auto"></div>
         <div class="field-row"><div><h3>默认目标语言</h3><p>例如 zh、en、ja</p></div><input data-ui="target_language" placeholder="en"></div>
       </div>
+    </section>
+    <section class="tab-panel hidden" data-panel="free">
+      <div class="section-title"><h2>免费翻译协议中心</h2><p>参考 FluentRead 的 16 路免费服务目录；独立启停、顺序、匿名连接测试与失败换线。</p></div>
+      <div class="glass card stack">
+        <div class="field-row"><div><h3>翻译调度模式</h3><p>智能加速根据成功率和延迟优先尝试；顺序模式依次尝试</p></div>
+          <select data-free="mode"><option value="sequential">顺序回退</option><option value="balanced">智能加速</option></select></div>
+        <div class="three-columns">
+          <label>每个服务超时（秒）<input data-free="timeout" type="number" min="1" max="15"></label>
+          <label>整次请求预算（秒）<input data-free="total_timeout" type="number" min="5" max="30"></label>
+          <label>失败冷却时间（秒）<input data-free="cooldown_seconds" type="number" min="30" max="86400"></label>
+        </div>
+        <div class="two-columns">
+          <label>最大输入字符数 <input data-free="max_characters" type="number" min="500" max="30000"></label>
+          <label>MyMemory 联系邮箱（可选） <input data-free="my_memory_email" type="email" autocomplete="off" placeholder="留空匿名使用"></label>
+        </div>
+      </div>
+      <div class="section-title"><h2>参与翻译的服务</h2><p>启用的服务可以在工作台独立选择。拖动排序暂不支持，可用上下移动按钮改变回退顺序。</p></div>
+      <div id="free-providers-list" class="stack"></div>
+      <p class="hint">网页匿名接口不是官方承诺的长期公共 API，可能遇到限流、访问验证或协议变更。免费额度与供应商政策各自独立；连接测试只发送固定示例句。</p>
     </section>
     <section class="tab-panel hidden" data-panel="providers">
       <div class="section-title"><h2>AI 翻译服务</h2><p>支持 OpenAI Chat Completions 兼容接口与本地 Ollama。可添加多个模型比较译文。</p></div>
